@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      width: 320px;
+      padding: 16px;
+      background: #f8f9fa;
+      color: #202124;
+      margin: 0;
+    }
+    h2 {
+      margin-top: 0;
+      color: #1a73e8;
+      font-size: 16px;
+    }
+    p {
+      font-size: 13px;
+      color: #5f6368;
+    }
+    label {
+      font-size: 13px;
+      font-weight: bold;
+      display: block;
+      margin-top: 12px;
+      margin-bottom: 4px;
+    }
+    input[type="text"] {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 8px;
+      border: 1px solid #dadce0;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+    button {
+      margin-top: 16px;
+      width: 100%;
+      padding: 10px;
+      background: #1a73e8;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #1557b0;
+    }
+    #status {
+      margin-top: 12px;
+      font-size: 13px;
+      text-align: center;
+      min-height: 18px;
+      color: #0f9d58;
+    }
+  </style>
+</head>
+<body>
+  <h2>Configuration Tracker PE</h2>
+  <p>Entrez l'URL de l'Application Web Google Apps Script générée (se terminant par /exec).</p>
+  
+  <label for="webappUrl">URL WebApp (GAS)</label>
+  <input type="text" id="webappUrl" placeholder="https://script.google.com/macros/s/.../exec">
+  
+  <button id="saveBtn">Sauvegarder l'URL</button>
+  <div id="status"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

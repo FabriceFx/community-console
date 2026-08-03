@@ -1,0 +1,38 @@
+#pe-tracker-btn {
+  position: fixed;
+  top: 100px;
+  right: 24px;
+  z-index: 999999;
+  background-color: #1a73e8;
+  color: white;
+  border: none;
+  border-radius: 24px;
+  padding: 12px 24px;
+  font-family: 'Google Sans', Roboto, Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(26,115,232,0.3);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+#pe-tracker-btn:hover {
+  background-color: #1557b0;
+  box-shadow: 0 6px 16px rgba(26,115,232,0.4);
+  transform: translateY(-2px);
+}
+
+#pe-tracker-btn:active {
+  transform: translateY(0);
+}
+
+#pe-tracker-btn:disabled {
+  background-color: #80868b;
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
+}

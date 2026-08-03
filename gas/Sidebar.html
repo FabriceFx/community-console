@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #1a73e8;
+      --primary-hover: #1557b0;
+      --bg: #f8f9fa;
+      --surface: #ffffff;
+      --text: #202124;
+      --text-light: #5f6368;
+      --border: #dadce0;
+    }
+    
+    body {
+      font-family: 'Outfit', sans-serif;
+      margin: 0;
+      padding: 16px;
+      background-color: var(--bg);
+      color: var(--text);
+    }
+    
+    .card {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+      margin-bottom: 16px;
+      border: 1px solid var(--border);
+    }
+    
+    h2 {
+      margin-top: 0;
+      font-size: 1.1rem;
+      font-weight: 500;
+      color: var(--primary);
+    }
+    
+    p {
+      font-size: 0.9rem;
+      color: var(--text-light);
+      line-height: 1.4;
+    }
+    
+    .input-group {
+      margin-top: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    
+    label {
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+    
+    input[type="password"] {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 0.9rem;
+      transition: all 0.2s;
+    }
+    
+    input[type="password"]:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(26,115,232,0.2);
+    }
+    
+    button {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    
+    button:hover {
+      background: var(--primary-hover);
+    }
+    
+    button:active {
+      transform: scale(0.98);
+    }
+    
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    
+    .status {
+      margin-top: 8px;
+      font-size: 0.85rem;
+      text-align: center;
+      min-height: 20px;
+    }
+    
+    .success {
+      color: #0f9d58;
+    }
+    
+    .error {
+      color: #d93025;
+    }
+    
+    .loader {
+      display: none;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #fff;
+      border-bottom-color: transparent;
+      border-radius: 50%;
+      animation: rotation 1s linear infinite;
+    }
+
+    @keyframes rotation {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  
+  <div class="card">
+    <h2>Configuration IA (Gemini)</h2>
+    <p>Cette clé permet à l'extension Chrome de générer automatiquement un résumé des questions.</p>
+    
+    <div class="input-group">
+      <label for="apiKey">Clé d'API Gemini</label>
+      <input type="password" id="apiKey" placeholder="AIzaSy...">
+      
+      <label for="modelName" style="margin-top:8px;">Modèle à utiliser</label>
+      <input type="text" id="modelName" placeholder="ex: gemini-pro, gemini-3.5-flash...">
+      
+      <button id="saveBtn" onclick="saveSettings()" style="margin-top:8px;">
+        <span id="btnText">Sauvegarder</span>
+        <span class="loader" id="loader"></span>
+      </button>
+      <div id="status" class="status"></div>
+    </div>
+  </div>
+  
+  <div class="card">
+    <h2>Liaison avec l'Extension</h2>
+    <p>Pour faire le lien avec l'extension Chrome, vous devez publier ce projet comme une <b>Application Web (WebApp)</b>.</p>
+    <p>Assurez-vous que l'accès est défini sur "N'importe qui" ou "Moi-même", selon votre usage.</p>
+  </div>
+
+  <script>
+    // Récupération de la config au chargement
+    google.script.run.withSuccessHandler(function(settings) {
+      if (settings) {
+        if (settings.apiKey) document.getElementById('apiKey').value = settings.apiKey;
+        if (settings.modelName) document.getElementById('modelName').value = settings.modelName;
+      }
+    }).getSettings();
+    
+    function saveSettings() {
+      const settings = {
+        apiKey: document.getElementById('apiKey').value,
+        modelName: document.getElementById('modelName').value || 'gemini-pro'
+      };
+      const btn = document.getElementById('saveBtn');
+      const loader = document.getElementById('loader');
+      const text = document.getElementById('btnText');
+      const status = document.getElementById('status');
+      
+      // Etat de chargement visuel
+      btn.disabled = true;
+      text.style.display = 'none';
+      loader.style.display = 'inline-block';
+      status.textContent = '';
+      
+      google.script.run
+        .withSuccessHandler(function(result) {
+          btn.disabled = false;
+          text.style.display = 'inline-block';
+          loader.style.display = 'none';
+          
+          status.textContent = '✅ Configuration sauvegardée !';
+          status.className = 'status success';
+          
+          setTimeout(() => { status.textContent = ''; }, 3000);
+        })
+        .withFailureHandler(function(error) {
+          btn.disabled = false;
+          text.style.display = 'inline-block';
+          loader.style.display = 'none';
+          
+          status.textContent = '❌ Erreur : ' + error.message;
+          status.className = 'status error';
+        })
+        .saveSettings(settings);
+    }
+  </script>
+</body>
+</html>
