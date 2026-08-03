@@ -252,8 +252,9 @@ function initTracker() {
     btn.innerHTML = '⏳ Analyse Gemini & Envoi...';
     
     try {
-      const storageData = await getStorage(['webappUrl']);
+      const storageData = await getStorage(['webappUrl', 'geminiApiKey']);
       const webappUrl = storageData.webappUrl;
+      const geminiApiKey = storageData.geminiApiKey || "";
 
       if (!webappUrl) {
         alert("Veuillez d'abord configurer l'URL de la WebApp Google Apps Script dans les options de l'extension (clic sur l'icône de l'extension dans Chrome).");
@@ -312,7 +313,8 @@ function initTracker() {
         url: window.location.href,
         author: author,
         product: product,
-        content: content
+        content: content,
+        apiKey: geminiApiKey
       };
 
       console.log("📡 Transmission au Service Worker :", payload);

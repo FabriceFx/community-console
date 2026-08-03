@@ -1,24 +1,47 @@
 document.addEventListener('DOMContentLoaded', function() {
-  // Charger l'URL au démarrage
-  chrome.storage.sync.get(['webappUrl'], function(result) {
+  const webappUrlInput = document.getElementById('webappUrl');
+  const geminiApiKeyInput = document.getElementById('geminiApiKey');
+  const toggleKeyBtn = document.getElementById('toggleKeyBtn');
+  const saveBtn = document.getElementById('saveBtn');
+  const status = document.getElementById('status');
+
+  // Charger la configuration existante depuis le stockage synchronisé Chrome
+  chrome.storage.sync.get(['webappUrl', 'geminiApiKey'], function(result) {
     if (result.webappUrl) {
-      document.getElementById('webappUrl').value = result.webappUrl;
+      webappUrlInput.value = result.webappUrl;
+    }
+    if (result.geminiApiKey) {
+      geminiApiKeyInput.value = result.geminiApiKey;
     }
   });
 
-  // Sauvegarder l'URL
-  document.getElementById('saveBtn').addEventListener('click', function() {
-    const url = document.getElementById('webappUrl').value.trim();
-    
+  // Basculement entre masqué (password) et lisible (text) pour la clé API Gemini
+  toggleKeyBtn.addEventListener('click', function() {
+    if (geminiApiKeyInput.type === 'password') {
+      geminiApiKeyInput.type = 'text';
+      toggleKeyBtn.textContent = '🙈';
+    } else {
+      geminiApiKeyInput.type = 'password';
+      toggleKeyBtn.textContent = '👁️';
+    }
+  });
+
+  // Sauvegarder l'URL et la clé d'API
+  saveBtn.addEventListener('click', function() {
+    const url = webappUrlInput.value.trim();
+    const apiKey = geminiApiKeyInput.value.trim();
+
     if (url && !url.startsWith('https://script.google.com/')) {
-      document.getElementById('status').textContent = '⚠️ L\'URL doit commencer par https://script.google.com/';
-      document.getElementById('status').style.color = '#d93025';
+      status.textContent = '⚠️ L\'URL doit commencer par https://script.google.com/';
+      status.style.color = '#d93025';
       return;
     }
 
-    chrome.storage.sync.set({webappUrl: url}, function() {
-      const status = document.getElementById('status');
-      status.textContent = '✅ Configuration sauvegardée !';
+    chrome.storage.sync.set({
+      webappUrl: url,
+      geminiApiKey: apiKey
+    }, function() {
+      status.textContent = '✅ Configuration enregistrée avec succès !';
       status.style.color = '#0f9d58';
       setTimeout(function() {
         status.textContent = '';

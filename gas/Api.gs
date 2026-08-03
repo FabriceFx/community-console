@@ -16,10 +16,19 @@ function doPost(e) {
     const product = data.product || "Inconnu";
     const content = data.content || "";
     
+    const providedApiKey = (data.apiKey || "").trim();
+    if (providedApiKey) {
+      try {
+        setGeminiApiKey(providedApiKey);
+      } catch (keyErr) {
+        console.warn("Impossible de sauvegarder la clé reçue via API dans les propriétés :", keyErr);
+      }
+    }
+    
     // Analyser avec Gemini si disponible
     let summary = "";
     if (content) {
-      summary = generateSummaryWithGemini(content, author, product);
+      summary = generateSummaryWithGemini(content, author, product, providedApiKey);
     }
     
     // Ajouter à la feuille

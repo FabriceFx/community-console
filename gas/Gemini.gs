@@ -163,12 +163,13 @@ function sanitizePii(text) {
  * @param {string} content Le texte brut de la question.
  * @param {string} author L'auteur de la question.
  * @param {string} product Le nom du produit Google.
+ * @param {string} [passedApiKey] Clé API Gemini optionnelle transmise dynamiquement.
  * @returns {string} Le résumé généré ou un message d'erreur/d'absence de clé.
  */
-function generateSummaryWithGemini(content, author = "Utilisateur", product = "Google") {
-  const apiKey = getGeminiApiKey();
+function generateSummaryWithGemini(content, author = "Utilisateur", product = "Google", passedApiKey = "") {
+  const apiKey = (passedApiKey && passedApiKey.trim()) ? passedApiKey.trim() : getGeminiApiKey();
   if (!apiKey) {
-    return "Clé API Gemini manquante. Veuillez la configurer dans 'Ouvrir le panneau de contrôle'.";
+    return "Clé API Gemini manquante. Veuillez la configurer dans l'extension Chrome ou via 'Ouvrir le panneau de contrôle'.";
   }
 
   const modelName = getGeminiModelName();

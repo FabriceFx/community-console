@@ -5,7 +5,7 @@
   <style>
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      width: 320px;
+      width: 330px;
       padding: 16px;
       background: #f8f9fa;
       color: #202124;
@@ -15,58 +15,117 @@
       margin-top: 0;
       color: #1a73e8;
       font-size: 16px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
-    p {
-      font-size: 13px;
+    p.subtitle {
+      font-size: 12px;
       color: #5f6368;
+      margin-bottom: 12px;
+      line-height: 1.4;
+    }
+    .form-group {
+      margin-bottom: 12px;
     }
     label {
-      font-size: 13px;
-      font-weight: bold;
+      font-size: 12px;
+      font-weight: 600;
       display: block;
-      margin-top: 12px;
       margin-bottom: 4px;
+      color: #3c4043;
     }
-    input[type="text"] {
+    input[type="text"],
+    input[type="password"] {
       width: 100%;
       box-sizing: border-box;
-      padding: 8px;
+      padding: 8px 10px;
       border: 1px solid #dadce0;
-      border-radius: 4px;
+      border-radius: 6px;
       font-size: 13px;
+      outline: none;
+      transition: border-color 0.2s;
     }
-    button {
-      margin-top: 16px;
+    input[type="text"]:focus,
+    input[type="password"]:focus {
+      border-color: #1a73e8;
+      box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
+    }
+    .input-wrapper {
+      position: relative;
+    }
+    .toggle-visibility {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 12px;
+      color: #5f6368;
+      padding: 2px 4px;
+      margin: 0;
+      width: auto;
+    }
+    .hint {
+      font-size: 11px;
+      color: #70757a;
+      margin-top: 3px;
+    }
+    .hint a {
+      color: #1a73e8;
+      text-decoration: none;
+    }
+    .hint a:hover {
+      text-decoration: underline;
+    }
+    button.save-btn {
+      margin-top: 14px;
       width: 100%;
       padding: 10px;
       background: #1a73e8;
       color: white;
       border: none;
-      border-radius: 4px;
+      border-radius: 6px;
       cursor: pointer;
-      font-weight: bold;
+      font-weight: 600;
+      font-size: 13px;
       transition: background 0.2s;
     }
-    button:hover {
+    button.save-btn:hover {
       background: #1557b0;
     }
     #status {
-      margin-top: 12px;
-      font-size: 13px;
+      margin-top: 10px;
+      font-size: 12px;
       text-align: center;
       min-height: 18px;
-      color: #0f9d58;
+      font-weight: 500;
     }
   </style>
 </head>
 <body>
-  <h2>Configuration Tracker PE</h2>
-  <p>Entrez l'URL de l'Application Web Google Apps Script générée (se terminant par /exec).</p>
+  <h2>⚙️ Configuration PE Tracker</h2>
+  <p class="subtitle">Configurez l'URL de votre backend Apps Script et votre clé d'API Gemini.</p>
   
-  <label for="webappUrl">URL WebApp (GAS)</label>
-  <input type="text" id="webappUrl" placeholder="https://script.google.com/macros/s/.../exec">
-  
-  <button id="saveBtn">Sauvegarder l'URL</button>
+  <div class="form-group">
+    <label for="webappUrl">URL WebApp Google Apps Script</label>
+    <input type="text" id="webappUrl" placeholder="https://script.google.com/macros/s/.../exec">
+  </div>
+
+  <div class="form-group">
+    <label for="geminiApiKey">Clé API Google Gemini</label>
+    <div class="input-wrapper">
+      <input type="password" id="geminiApiKey" placeholder="AIzaSy...">
+      <button type="button" class="toggle-visibility" id="toggleKeyBtn" title="Afficher/Masquer">👁️</button>
+    </div>
+    <div class="hint">
+      Obtenez votre clé gratuite sur <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a>.
+    </div>
+  </div>
+
+  <button class="save-btn" id="saveBtn">Sauvegarder la configuration</button>
   <div id="status"></div>
 
   <script src="popup.js"></script>
