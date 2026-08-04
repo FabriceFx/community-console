@@ -2,6 +2,17 @@
 
 Toutes les modifications notables apportées à ce projet sont documentées dans ce fichier.
 
+## [1.3.3] - 2026-08-04
+
+### 💬 Alignement sur les Recommandations Google CM (Perte d'Accès Compte Google)
+
+> **Un utilisateur bloqué hors de son compte ressent déjà du désarroi et de la frustration.**  
+> Lui envoyer un lien de récupération automatique qui va droit dans le mur ne fait qu'amplifier son sentiment d'être ignoré par les experts. Il faut un accusé de réception humain et personnalisé dès les premières phrases.
+
+- **Accusé de réception contextuel (Google Account)** : Gemini personnalise désormais les 1 ou 2 premières phrases en récapitulant les faits précis mentionnés par l'utilisateur (ex: ancien téléphone perdu, e-mail de secours obsolète).
+- **Franchise et clarté immédiates** : Annonce directe et bienveillante dès le début de la réponse lorsque la récupération est impossible, évitant les renvois vers des liens génériques voués à l'échec.
+- **Explication claire des règles de sécurité** : Présentation pédagogique des contraintes du système automatisé Google pour faire comprendre les raisons de la sécurité sans sentiment de rejet.
+
 ## [1.3.2] - 2026-08-04
 
 ### 🛠️ Correction de la résolution des URL Vertex AI
