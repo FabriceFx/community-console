@@ -244,8 +244,7 @@ I hope, ${displayName}, that this answer will be helpful to you.
  
 If you have further questions or if anything remains unclear, feel free to reply, we will do everything we can to help you.
  
-Fabrice
-https://atelier-informatique.com/`;
+`;
       } else {
         return `Bonjour ${displayName}, et bienvenue sur la communauté des utilisateurs de ${product} !
  
@@ -257,8 +256,7 @@ J’espère, ${displayName}, que cette réponse vous sera utile.
 
 Si vous avez d’autres questions ou si des points restent flous, n’hésitez pas à revenir vers nous, nous ferons tout pour vous aider.
  
-Fabrice
-https://atelier-informatique.com/`;
+`;
       }
     }
     return "Aucune réponse n'a pu être générée.";
