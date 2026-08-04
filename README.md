@@ -1,6 +1,6 @@
 # Outil de suivi Community Console (PE Tracker)
 
-[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Chrome MV3](https://img.shields.io/badge/Chrome-Manifest_V3-green.svg)](extension/manifest.json)
 [![Google Apps Script](https://img.shields.io/badge/Backend-Google_Apps_Script-blue.svg)](gas/)
@@ -24,8 +24,10 @@ Cet outil complet est destiné aux **Product Experts (PE) Google** pour automati
   - Localisation de l'éditeur de texte (`contenteditable` ou `textarea`).
   - Injection directe de la réponse formulée par Gemini et défilement fluide (`scrollIntoView`).
 - **Fallback Presse-Papier Intelligent** : Copie automatique de la réponse dans le presse-papier si le fil est verrouillé ou le champ non modifiable.
+- **Gestionnaire de Clé API Gemini** : Champ de saisie sécurisé avec masque de mot de passe directement dans le popup de l'extension.
 
 #### 🤖 Backend Google Apps Script & IA Gemini
+- **Support Multilingue Avancé (FR, EN, DE, ES, IT)** : Détection automatique des questions rédigées en Français, Anglais, Allemand, Espagnol et Italien avec génération de formules d'accueil et de salutations adaptées.
 - **Génération IA avec Google Search Grounding** : Utilisation des modèles Gemini (3.5 / 3.6 Flash) couplée à la recherche Google pour fournir des réponses techniques avec des liens vers les articles officiels du Centre d'aide.
 - **Validation des URL Anti-404** : Vérification HTTP automatique des liens générés par l'IA et résolution des liens de redirection Vertex AI pour bannir les erreurs 404.
 - **Protection des Données Personnelles (PII)** : Masquage automatique des e-mails, numéros de téléphone et clés API avant toute transmission à l'IA.

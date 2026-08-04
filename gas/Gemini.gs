@@ -188,8 +188,8 @@ Voici son message :
 Génère une réponse complète, claire, directement utile et synthétique pour résoudre son problème.
 
 RÈGLES DE FORMATAGE STRICTES :
-1. Réponds DANS LA MÊME LANGUE que la question (si la question est en anglais, réponds en anglais ; si en français, réponds en français).
-2. Ne rédige AUCUNE formule de politesse au début ou à la fin (pas de bonjour/hello, pas de salutations). Donne UNIQUEMENT le corps de la réponse technique.
+1. Réponds DANS LA MÊME LANGUE que la question (français, anglais, allemand, espagnol, italien, etc.).
+2. Ne rédige AUCUNE formule de politesse au début ou à la fin (pas de bonjour/hello/hallo/hola/ciao, pas de salutations). Donne UNIQUEMENT le corps de la réponse technique.
 3. N'utilise JAMAIS de lignes de séparation (pas de --- ni de ___).
 4. N'utilise JAMAIS de caractères backticks (\`), ni d'astérisques (*) pour les puces. Utilise des tirets (-) pour les listes.
 5. Sois synthétique : donne les étapes essentielles de manière claire, sans introduire de blabla théorique inutile, mais veille à ce que la réponse soit complète et finie.
@@ -230,34 +230,10 @@ RÈGLES DE FORMATAGE STRICTES :
       // Valider et filtrer les URL pour éliminer les erreurs 404
       const technicalResponse = cleanAndValidateUrls(rawText, candidate);
 
-      const isEnglish = isEnglishContent(content);
+      const lang = detectLanguage(content);
       const displayName = authorName;
 
-      if (isEnglish) {
-        return `Hello ${displayName}, and welcome to the ${product} User Community!
- 
-I am a user like you, and I will do my best to help you resolve this issue.
-
-${technicalResponse}
-
-I hope, ${displayName}, that this answer will be helpful to you.
- 
-If you have further questions or if anything remains unclear, feel free to reply, we will do everything we can to help you.
- 
-`;
-      } else {
-        return `Bonjour ${displayName}, et bienvenue sur la communauté des utilisateurs de ${product} !
- 
-Je suis un utilisateur comme vous, et je vais faire de mon mieux pour vous aider à résoudre ce problème.
-
-${technicalResponse}
-
-J’espère, ${displayName}, que cette réponse vous sera utile.
-
-Si vous avez d’autres questions ou si des points restent flous, n’hésitez pas à revenir vers nous, nous ferons tout pour vous aider.
- 
-`;
-      }
+      return buildFormattedResponse(lang, displayName, product, technicalResponse);
     }
     return "Aucune réponse n'a pu être générée.";
 
@@ -268,19 +244,122 @@ Si vous avez d’autres questions ou si des points restent flous, n’hésitez p
 }
 
 /**
- * Détecte si le texte de la question est principalement en anglais
- * @param {string} text 
- * @returns {boolean} true si le texte est en anglais
+ * Détecte la langue principale du texte (français, anglais, allemand, espagnol, italien).
+ * @param {string} text Le texte à analyser
+ * @returns {string} Code de langue ('fr', 'en', 'de', 'es', 'it')
  */
-function isEnglishContent(text) {
-  if (!text) return false;
-  const englishWords = /\b(the|is|and|to|in|you|that|it|of|for|on|with|as|this|was|at|by|an|be|from|or|have|my|not|your|can|how|what|why|help|account|issue|problem|please)\b/gi;
-  const frenchWords = /\b(le|la|les|un|une|des|et|du|en|est|dans|pour|sur|avec|par|ce|cette|que|qui|pas|mon|ma|mes|bonjour|souhaite|compte|problème|comment|merci)\b/gi;
+function detectLanguage(text) {
+  if (!text || typeof text !== 'string') return 'fr';
 
-  const englishMatches = (text.match(englishWords) || []).length;
-  const frenchMatches = (text.match(frenchWords) || []).length;
+  const wordLists = {
+    fr: /\b(le|la|les|un|une|des|et|du|en|est|dans|pour|sur|avec|par|ce|cette|que|qui|pas|mon|ma|mes|bonjour|souhaite|compte|problème|comment|merci)\b/gi,
+    en: /\b(the|is|and|to|in|you|that|it|of|for|on|with|as|this|was|at|by|an|be|from|or|have|my|not|your|can|how|what|why|help|account|issue|problem|please)\b/gi,
+    de: /\b(der|die|das|und|ist|in|den|von|zu|mit|sich|des|auf|für|im|dem|nicht|ein|eine|einer|einem|als|auch|es|an|werden|aus|er|hat|dass|sie|nach|wie|bitte|konto|problem|hilfe|hallo)\b/gi,
+    es: /\b(el|la|los|las|un|una|unos|unas|y|de|en|que|es|por|para|con|no|su|sus|como|mas|pero|le|ya|este|esta|hola|cuenta|problema|ayuda|gracias)\b/gi,
+    it: /\b(il|lo|la|i|gli|le|un|uno|una|e|di|da|in|con|su|per|tra|fra|che|non|si|del|della|dei|delle|questo|questa|come|ciao|conto|problema|aiuto|grazie)\b/gi
+  };
 
-  return englishMatches > frenchMatches;
+  const scores = { fr: 0, en: 0, de: 0, es: 0, it: 0 };
+
+  for (const lang in wordLists) {
+    const matches = text.match(wordLists[lang]);
+    scores[lang] = matches ? matches.length : 0;
+  }
+
+  let maxLang = 'fr';
+  let maxScore = 0;
+
+  for (const lang in scores) {
+    if (scores[lang] > maxScore) {
+      maxScore = scores[lang];
+      maxLang = lang;
+    }
+  }
+
+  return maxLang;
+}
+
+/**
+ * Formate la réponse globale adaptée à la langue détectée avec salutations et signature.
+ * @param {string} lang Le code de langue ('fr', 'en', 'de', 'es', 'it')
+ * @param {string} displayName Nom de l'utilisateur
+ * @param {string} product Produit Google
+ * @param {string} technicalResponse Corps technique généré par l'IA
+ * @returns {string} La réponse complète mise en forme
+ */
+function buildFormattedResponse(lang, displayName, product, technicalResponse) {
+  switch (lang) {
+    case 'en':
+      return `Hello ${displayName}, and welcome to the ${product} User Community!
+ 
+I am a user like you, and I will do my best to help you resolve this issue.
+
+${technicalResponse}
+
+I hope, ${displayName}, that this answer will be helpful to you.
+ 
+If you have further questions or if anything remains unclear, feel free to reply, we will do everything we can to help you.
+ 
+Fabrice
+https://atelier-informatique.com/`;
+
+    case 'de':
+      return `Hallo ${displayName} und willkommen in der ${product}-Nutzercommunity!
+ 
+Ich bin ein Nutzer wie Sie und werde mein Bestes tun, um Ihnen bei der Lösung dieses Problems zu helfen.
+
+${technicalResponse}
+
+Ich hoffe, ${displayName}, dass Ihnen diese Antwort weiterhilft.
+ 
+Wenn Sie weitere Fragen haben oder etwas unklar geblieben ist, können Sie gerne antworten. Wir werden alles tun, um Ihnen zu helfen.
+ 
+Fabrice
+https://atelier-informatique.com/`;
+
+    case 'es':
+      return `Hola ${displayName}, ¡y le damos la bienvenida a la comunidad de usuarios de ${product}!
+ 
+Soy un usuario como usted y haré todo lo posible para ayudarle a resolver este problema.
+
+${technicalResponse}
+
+Espero, ${displayName}, que esta respuesta le sea de utilidad.
+ 
+Si tiene más preguntas o si algo no le queda claro, no dude en responder, haremos todo lo posible para ayudarle.
+ 
+Fabrice
+https://atelier-informatique.com/`;
+
+    case 'it':
+      return `Ciao ${displayName} e benvenuto/a nella community degli utenti di ${product}!
+ 
+Sono un utente come te e farò del mio meglio per aiutarti a risolvere questo problema.
+
+${technicalResponse}
+
+Spero, ${displayName}, che questa risposta ti sia utile.
+ 
+Se hai altre domande o se qualcosa non è chiaro, non esitare a rispondere, faremo tutto il possibile per aiutarti.
+ 
+Fabrice
+https://atelier-informatique.com/`;
+
+    case 'fr':
+    default:
+      return `Bonjour ${displayName}, et bienvenue sur la communauté des utilisateurs de ${product} !
+ 
+Je suis un utilisateur comme vous, et je vais faire de mon mieux pour vous aider à résoudre ce problème.
+
+${technicalResponse}
+
+J’espère, ${displayName}, que cette réponse vous sera utile.
+
+Si vous avez d’autres questions ou si des points restent flous, n’hésitez pas à revenir vers nous, nous ferons tout pour vous aider.
+ 
+Fabrice
+https://atelier-informatique.com/`;
+  }
 }
 
 /**

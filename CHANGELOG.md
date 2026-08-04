@@ -2,6 +2,17 @@
 
 Toutes les modifications notables apportées à ce projet sont documentées dans ce fichier.
 
+## [1.3.0] - 2026-08-04
+
+### 🌍 Support Multilingue (FR, EN, DE, ES, IT) & Clé API
+
+> **Des utilisateurs du monde entier vous sollicitent dans leur propre langue.**  
+> Répondre à un membre de la communauté en allemand, espagnol ou italien avec un message d'accueil générique casse le sentiment d'accompagnement humain et personnalisé. 
+
+- **Prise en charge multilingue complète** : Détection automatique de la langue des questions posées en allemand (`de`), espagnol (`es`), italien (`it`), français (`fr`) et anglais (`en`).
+- **Formules d'accueil et de conclusion naturelles** : Génération de messages de bienvenue et de politesse parfaitement adaptés dans chacune des 5 langues.
+- **Configuration simplifiée de la clé API Gemini** : Champ de saisie sécurisé de la clé API directement dans le popup de l'extension Chrome avec bascule de visibilité.
+
 ## [1.2.0] - 2026-08-03
 
 ### 🚀 Nouveautés & Automatisation
