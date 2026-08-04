@@ -65,21 +65,34 @@ function resolveRedirectUrl(url) {
     const response = UrlFetchApp.fetch(url, {
       method: 'get',
       followRedirects: false,
-      muteHttpExceptions: true
+      muteHttpExceptions: true,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
     });
+
     const headers = response.getHeaders();
-    const location = headers['Location'] || headers['location'];
-    if (location && location.startsWith('http')) {
+    let location = null;
+
+    for (const key in headers) {
+      if (key.toLowerCase() === 'location') {
+        location = headers[key];
+        break;
+      }
+    }
+
+    if (location && typeof location === 'string' && location.startsWith('http')) {
       return location;
     }
   } catch (e) {
     console.warn("Impossible de résoudre la redirection Vertex (" + url + ") : " + e.toString());
   }
+
   return url;
 }
 
 /**
- * Nettoie les URL générées par Gemini en s'appuyant sur le grounding et en éliminant les liens 404.
+ * Nettoie les URL générées par Gemini en s'appuyant sur le grounding et en éliminant les liens 404 et redirections Vertex.
  * @param {string} text Le texte brut généré par Gemini
  * @param {Object} candidate Le candidat retourné par l'API Gemini
  * @returns {string} Le texte avec les URL corrigées ou nettoyées
@@ -87,7 +100,7 @@ function resolveRedirectUrl(url) {
 function cleanAndValidateUrls(text, candidate) {
   if (!text) return "";
 
-  // 1. Extraire et résoudre les URL de redirection Vertex AI vers leurs cibles réelles
+  // 1. Extraire et résoudre les URL de redirection Vertex AI depuis les groundingChunks
   const verifiedUrls = [];
   if (candidate && candidate.groundingMetadata && candidate.groundingMetadata.groundingChunks) {
     candidate.groundingMetadata.groundingChunks.forEach(chunk => {
@@ -103,34 +116,53 @@ function cleanAndValidateUrls(text, candidate) {
   // 2. Traiter et remplacer les liens Markdown [Titre](URL) par Titre : URL (sans crochets ni parenthèses)
   const markdownLinkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)/g;
   let cleanedText = text.replace(markdownLinkRegex, (match, label, url) => {
-    // Si c'est une URL de redirection Vertex, on la résout vers sa destination finale
     let targetUrl = resolveRedirectUrl(url);
 
-    // Si l'URL cible résolue figure dans le grounding vérifié, on l'utilise
     if (verifiedUrls.includes(targetUrl) || verifiedUrls.includes(url)) {
       return `${label} : ${targetUrl}`;
     }
 
-    // Tester la validité de l'URL via HTTP
     if (urlCache[targetUrl] === undefined) {
       urlCache[targetUrl] = isUrlValid(targetUrl);
     }
 
     if (urlCache[targetUrl]) {
-      return `${label} : ${targetUrl}`; // URL directe valide
+      return `${label} : ${targetUrl}`;
     }
 
-    // En cas de 404 : utiliser la première URL de grounding vérifiée si disponible
     if (verifiedUrls.length > 0) {
       const fallbackUrl = verifiedUrls[0];
       return `${label} : ${fallbackUrl}`;
     }
 
-    // À défaut, conserver le texte d'ancre sans lien rompu
     return label;
   });
 
-  // Éliminer les crochets et parenthèses résiduels autour des URL
+  // 3. Remplacer TOUTES les URL brutes restant dans le texte (notamment les redirections Vertex AI)
+  const rawUrlRegex = /https?:\/\/[^\s\)\],]+/g;
+  cleanedText = cleanedText.replace(rawUrlRegex, (url) => {
+    let targetUrl = resolveRedirectUrl(url);
+
+    if (targetUrl !== url) {
+      return targetUrl;
+    }
+
+    if (urlCache[targetUrl] === undefined) {
+      urlCache[targetUrl] = isUrlValid(targetUrl);
+    }
+
+    if (urlCache[targetUrl]) {
+      return targetUrl;
+    }
+
+    if (verifiedUrls.length > 0) {
+      return verifiedUrls[0];
+    }
+
+    return targetUrl;
+  });
+
+  // 4. Éliminer les crochets et parenthèses résiduels autour des URL
   cleanedText = cleanedText.replace(/\[(https?:\/\/[^\s\]]+)\]/g, '$1');
   cleanedText = cleanedText.replace(/\((https?:\/\/[^\s\)]+)\)/g, '$1');
 
