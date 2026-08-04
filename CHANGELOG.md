@@ -2,6 +2,26 @@
 
 Toutes les modifications notables apportées à ce projet sont documentées dans ce fichier.
 
+## [1.3.2] - 2026-08-04
+
+### 🛠️ Correction de la résolution des URL Vertex AI
+
+> **Rien de plus déroutant qu'un lien de redirection technique affiché en clair à un utilisateur.**  
+> Voir apparaître une URL opaque `vertexaisearch.cloud.google.com/grounding-api-redirect/...` gâche la propreté de la réponse et nuit à la confiance de l'utilisateur.
+
+- **Résolution universelle des URL Vertex AI** : Interception et conversion systématique de TOUTES les URL de redirection Vertex AI brutes vers leurs liens canoniques directs (ex. `https://support.google.com/mail/answer/...`).
+- **En-têtes HTTP de redirection corrigés** : Amélioration de l'inspection de l'en-tête `Location` lors de l'appel `fetch` backend.
+
+## [1.3.1] - 2026-08-04
+
+### 🎨 Nettoyage du formatage des sources
+
+> **Les crochets et parenthèses Markdown n'ont pas leur place dans un texte de réponse final.**  
+> Les balises de type `[Titre](URL)` sont utiles pour du code, mais inutiles et inesthétiques dans un message d'assistance destinées à des utilisateurs finaux.
+
+- **Suppression des crochets et parenthèses** : Conversion automatique du formatage des liens en `Titre : URL` propre et lisible.
+- **Conversion RichText Google Sheets** : Transformation des URL brutes en hyperliens cliquables natifs dans la feuille de calcul (`setLinkUrl`).
+
 ## [1.3.0] - 2026-08-04
 
 ### 🌍 Support Multilingue (FR, EN, DE, ES, IT) & Clé API
@@ -11,7 +31,6 @@ Toutes les modifications notables apportées à ce projet sont documentées dans
 
 - **Prise en charge multilingue complète** : Détection automatique de la langue des questions posées en allemand (`de`), espagnol (`es`), italien (`it`), français (`fr`) et anglais (`en`).
 - **Formules d'accueil et de conclusion naturelles** : Génération de messages de bienvenue et de politesse parfaitement adaptés dans chacune des 5 langues.
-- **Formatage propre des URL sources (sans crochets ni parenthèses)** : Nettoyage systématique de la syntaxe Markdown `[Titre](URL)` en format lisible `Titre : URL` sans caractères de balisage inutiles.
 - **Configuration simplifiée de la clé API Gemini** : Champ de saisie sécurisé de la clé API directement dans le popup de l'extension Chrome avec bascule de visibilité.
 
 ## [1.2.0] - 2026-08-03
