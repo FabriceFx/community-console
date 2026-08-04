@@ -100,7 +100,7 @@ function cleanAndValidateUrls(text, candidate) {
 
   const urlCache = {};
 
-  // 2. Traiter et remplacer les liens Markdown [Titre](URL)
+  // 2. Traiter et remplacer les liens Markdown [Titre](URL) par Titre : URL (sans crochets ni parenthèses)
   const markdownLinkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)/g;
   let cleanedText = text.replace(markdownLinkRegex, (match, label, url) => {
     // Si c'est une URL de redirection Vertex, on la résout vers sa destination finale
@@ -108,7 +108,7 @@ function cleanAndValidateUrls(text, candidate) {
 
     // Si l'URL cible résolue figure dans le grounding vérifié, on l'utilise
     if (verifiedUrls.includes(targetUrl) || verifiedUrls.includes(url)) {
-      return `[${label}](${targetUrl})`;
+      return `${label} : ${targetUrl}`;
     }
 
     // Tester la validité de l'URL via HTTP
@@ -117,18 +117,22 @@ function cleanAndValidateUrls(text, candidate) {
     }
 
     if (urlCache[targetUrl]) {
-      return `[${label}](${targetUrl})`; // URL directe valide
+      return `${label} : ${targetUrl}`; // URL directe valide
     }
 
     // En cas de 404 : utiliser la première URL de grounding vérifiée si disponible
     if (verifiedUrls.length > 0) {
       const fallbackUrl = verifiedUrls[0];
-      return `[${label}](${fallbackUrl})`;
+      return `${label} : ${fallbackUrl}`;
     }
 
     // À défaut, conserver le texte d'ancre sans lien rompu
     return label;
   });
+
+  // Éliminer les crochets et parenthèses résiduels autour des URL
+  cleanedText = cleanedText.replace(/\[(https?:\/\/[^\s\]]+)\]/g, '$1');
+  cleanedText = cleanedText.replace(/\((https?:\/\/[^\s\)]+)\)/g, '$1');
 
   return cleanedText;
 }
@@ -193,7 +197,7 @@ RÈGLES DE FORMATAGE STRICTES :
 3. N'utilise JAMAIS de lignes de séparation (pas de --- ni de ___).
 4. N'utilise JAMAIS de caractères backticks (\`), ni d'astérisques (*) pour les puces. Utilise des tirets (-) pour les listes.
 5. Sois synthétique : donne les étapes essentielles de manière claire, sans introduire de blabla théorique inutile, mais veille à ce que la réponse soit complète et finie.
-6. Indique obligatoirement les sources officielles et liens vers les articles du Centre d'aide Google pertinents (trouvés via googleSearch) pour étayer ta réponse. ATTENTION STRICTE : N'invente JAMAIS d'URL ni d'identifiant d'article (ne devine pas des numéros d'anecdote ou d'article comme /answer/123456). N'utilise QUE les URL réelles et exactes retournées par les résultats de recherche googleSearch. Format des liens : [Titre de l'article](https://URL_EXACTE).
+6. Indique obligatoirement les sources officielles et liens vers les articles du Centre d'aide Google pertinents (trouvés via googleSearch) pour étayer ta réponse. ATTENTION STRICTE : N'invente JAMAIS d'URL ni d'identifiant d'article (ne devine pas des numéros d'anecdote ou d'article comme /answer/123456). N'utilise QUE les URL réelles et exactes retournées par les résultats de recherche googleSearch. N'utilise JAMAIS de crochets [...] ni de parenthèses (...) autour des liens. Format obligatoire des liens : Titre de l'article : https://URL_EXACTE.
 7. PROTECTION DES DONNÉES PERSONNELLES (PII) : Ne mentionne et ne répète JAMAIS de données personnelles (email, téléphone, mot de passe, adresse, clé API, etc.) dans ta réponse. Si la question d'origine contenait des PII ou si l'utilisateur semblait partager des données confidentielles, ajoute impérativement un court avertissement amical à la fin pour lui rappeler que le forum est public et qu'il ne faut jamais y partager d'informations personnelles.`;
 
   const payload = {
@@ -432,7 +436,8 @@ function formatMarkdownToRichText(text) {
   // Groupe 5/6: label/url de Groupe 4
   // Groupe 7: **texte** (Gras seul)
   // Groupe 8: texte de Groupe 7
-  const combinedRegex = /(\*\*\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)\*\*)|(\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\))|(\*\*([^*]+)\*\*)/g;
+  // Groupe 9: URL brute (https://...)
+  const combinedRegex = /(\*\*\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)\*\*)|(\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\))|(\*\*([^*]+)\*\*)|(https?:\/\/[^\s\)\],]+)/g;
 
   let finalString = "";
   let boldRanges = [];
@@ -466,6 +471,10 @@ function formatMarkdownToRichText(text) {
       // **texte** -> Gras seul
       displayText = match[8];
       isBold = true;
+    } else if (match[9]) {
+      // URL brute -> Lien cliquable sur l'URL
+      displayText = match[9];
+      linkUrl = match[9];
     }
 
     const start = currentPos;

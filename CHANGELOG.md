@@ -11,6 +11,7 @@ Toutes les modifications notables apportées à ce projet sont documentées dans
 
 - **Prise en charge multilingue complète** : Détection automatique de la langue des questions posées en allemand (`de`), espagnol (`es`), italien (`it`), français (`fr`) et anglais (`en`).
 - **Formules d'accueil et de conclusion naturelles** : Génération de messages de bienvenue et de politesse parfaitement adaptés dans chacune des 5 langues.
+- **Formatage propre des URL sources (sans crochets ni parenthèses)** : Nettoyage systématique de la syntaxe Markdown `[Titre](URL)` en format lisible `Titre : URL` sans caractères de balisage inutiles.
 - **Configuration simplifiée de la clé API Gemini** : Champ de saisie sécurisé de la clé API directement dans le popup de l'extension Chrome avec bascule de visibilité.
 
 ## [1.2.0] - 2026-08-03
