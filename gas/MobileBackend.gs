@@ -9,8 +9,8 @@
  * @param {string} threadUrl L'URL complète du thread Google Community Console
  * @returns {Object} Objet contenant le statut, le titre, le produit et la réponse Gemini
  */
-function processMobileThreadUrl(threadUrl) {
-  console.log("processMobileThreadUrl appelé avec URL :", threadUrl);
+function processMobileThreadUrl(threadUrl, providedAuthor) {
+  console.log("processMobileThreadUrl appelé avec URL :", threadUrl, "Auteur transmis :", providedAuthor);
 
   if (!threadUrl || typeof threadUrl !== 'string') {
     throw new Error("L'URL du thread fournie est invalide.");
@@ -63,43 +63,41 @@ function processMobileThreadUrl(threadUrl) {
     content = title;
   }
 
-  // 4. Extraire le nom de l'auteur de la question (JSON-LD, meta et classes HTML)
-  let author = "";
-  const jsonLdMatch = htmlText.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
-  if (jsonLdMatch) {
-    for (const tag of jsonLdMatch) {
-      try {
-        const jsonContent = tag.replace(/<script[^>]*>/i, '').replace(/<\/script>/i, '');
-        const parsed = JSON.parse(jsonContent);
-        if (parsed.author && parsed.author.name) {
-          author = parsed.author.name.trim();
-          break;
-        }
-        if (parsed.creator && parsed.creator.name) {
-          author = parsed.creator.name.trim();
-          break;
-        }
-        if (Array.isArray(parsed) && parsed[0] && parsed[0].author && parsed[0].author.name) {
-          author = parsed[0].author.name.trim();
-          break;
-        }
-      } catch (e) {}
+  // 4. Extraire le nom de l'auteur de la question
+  let author = (providedAuthor || "").trim();
+
+  if (!author) {
+    // A. Recherche dans le payload de données Google (avatar + nom d'affichage)
+    const avatarMatch = htmlText.match(/googleusercontent\.com\/[^"]*",\s*"([^"]{2,60})"/i);
+    if (avatarMatch && avatarMatch[1] && !avatarMatch[1].startsWith('http')) {
+      author = avatarMatch[1].trim();
     }
   }
 
   if (!author) {
-    const metaAuthor = htmlText.match(/<meta\s+name=["']author["']\s+content=["']([^"']+)["']/i) ||
-                       htmlText.match(/property=["']author["']\s+content=["']([^"']+)["']/i);
-    if (metaAuthor && metaAuthor[1]) {
-      author = metaAuthor[1].trim();
+    // B. Lien vers le profil utilisateur de la communauté
+    const userLinkMatch = htmlText.match(/<a\s+[^>]*href=["']\/s\/community\/user\/[^"']+["'][^>]*>([^<]+)<\/a>/i);
+    if (userLinkMatch && userLinkMatch[1]) {
+      author = userLinkMatch[1].trim();
     }
   }
 
   if (!author) {
-    const authorRegex = /(?:class=["'][^"']*scTailwindThreadPost_headerUserinfoname[^"']*["'][^>]*>|data-stats-id=["']user-name["'][^>]*>|class=["'][^"']*user-name[^"']*["'][^>]*>)([^<]+)/i;
-    const authorMatch = htmlText.match(authorRegex);
-    if (authorMatch && authorMatch[1]) {
-      author = authorMatch[1].trim();
+    // C. Balises data-stats-id ou classes CSS de la Community Console
+    const cssMatch = htmlText.match(/(?:data-stats-id=["']user-name["']|class=["'][^"']*(?:user-name|Userinfoname)[^"']*["'])[^>]*>([^<]+)/i);
+    if (cssMatch && cssMatch[1]) {
+      author = cssMatch[1].trim();
+    }
+  }
+
+  if (!author) {
+    // D. Titre ou meta og:title si contenant "de [Auteur]" ou "par [Auteur]"
+    const ogTitleMatch = htmlText.match(/property=["']og:title["']\s+content=["']([^"']+)["']/i);
+    if (ogTitleMatch && ogTitleMatch[1]) {
+      const matchDe = ogTitleMatch[1].match(/(?:par|de|by)\s+([^-–—|]+)/i);
+      if (matchDe && matchDe[1]) {
+        author = matchDe[1].trim();
+      }
     }
   }
 
@@ -107,10 +105,10 @@ function processMobileThreadUrl(threadUrl) {
     author = "Utilisateur inconnu";
   }
 
-  // 4. Générer la réponse via l'IA Gemini
+  // 5. Générer la réponse via l'IA Gemini
   const summary = generateSummaryWithGemini(content, author, product);
 
-  // 5. Ajouter une nouvelle ligne dans la feuille Google Sheets
+  // 6. Ajouter une nouvelle ligne dans la feuille Google Sheets
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(CONFIG.SHEET_NAME);
   if (!sheet) {
@@ -144,6 +142,7 @@ function processMobileThreadUrl(threadUrl) {
     status: "success",
     id: newId,
     title: title,
+    author: author,
     product: product,
     summary: summary || ""
   };

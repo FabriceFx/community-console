@@ -2,6 +2,16 @@
 
 Toutes les modifications notables apportées à ce projet sont documentées dans ce fichier.
 
+## [1.5.3] - 2026-08-06
+
+### 👤 Optimisation de la Récupération des Prénoms / Auteurs sur WebApp Mobile
+
+> **Garantir la capture exacte du prénom de l'utilisateur sur mobile.**  
+> Les requêtes HTTP serveur sur le forum Google reçoivent un payload initial compact. Combiner l'extraction serveur avec un champ de saisie optionnel garantit d'avoir 100% de prénoms exacts.
+
+- **Extraction Payload Google Server (`gas/MobileBackend.gs`)** : Analyse du bloc `googleusercontent.com` dans la réponse serveur initiale pour capturer l'auteur exact du post original sans dépendre du rendu client JavaScript.
+- **Champ optionnel Prénom / Auteur (`gas/MobileUi.html`)** : Ajout d'un champ souple permettant d'indiquer directement le prénom de l'auteur sur mobile si souhaité, avec extraction automatique en cas d'absence.
+
 ## [1.5.2] - 2026-08-06
 
 ### 🛠️ Correction de la Détection Multilingue (Élimination des Faux Positifs Espagnols)

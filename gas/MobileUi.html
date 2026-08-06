@@ -238,6 +238,11 @@
         <input type="url" id="threadUrl" placeholder="https://support.google.com/..." autocomplete="off" spellcheck="false">
       </div>
 
+      <div class="form-group">
+        <label for="authorName">Prénom / Auteur <span style="font-weight:normal; text-transform:none; opacity:0.75;">(Optionnel)</span></label>
+        <input type="text" id="authorName" placeholder="Extrait automatiquement si vide..." autocomplete="off" spellcheck="false">
+      </div>
+
       <button id="submitBtn" class="btn" onclick="submitThread()">
         <span class="spinner" id="spinner"></span>
         <span id="btnText">🚀 Analyser & Suivre</span>
@@ -273,6 +278,8 @@
     function submitThread() {
       const urlInput = document.getElementById('threadUrl');
       const url = urlInput.value.trim();
+      const authorInput = document.getElementById('authorName');
+      const authorName = authorInput ? authorInput.value.trim() : "";
 
       if (!url) {
         alert("Veuillez coller l'URL du thread Google.");
@@ -297,7 +304,7 @@
 
           if (response && response.status === 'success') {
             document.getElementById('productBadge').innerText = response.product || 'Google';
-            document.getElementById('resultTitle').innerText = response.title || 'Thread enregistré';
+            document.getElementById('resultTitle').innerText = (response.author ? response.author + " • " : "") + (response.title || 'Thread enregistré');
             currentSummary = response.summary || '';
             document.getElementById('summaryText').innerText = currentSummary || 'Thread sauvegardé dans Google Sheets.';
             resultCard.style.display = 'block';
@@ -312,7 +319,7 @@
           btnText.innerText = '🚀 Analyser & Suivre';
           alert("Erreur d'analyse : " + error.message);
         })
-        .processMobileThreadUrl(url);
+        .processMobileThreadUrl(url, authorName);
     }
 
     function copyAnswer() {
