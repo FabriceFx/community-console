@@ -1,13 +1,13 @@
 # Outil de suivi Community Console (PE Tracker)
 
-[![Version](https://img.shields.io/badge/version-1.3.3-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.4.0-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Chrome MV3](https://img.shields.io/badge/Chrome-Manifest_V3-green.svg)](extension/manifest.json)
 [![Google Apps Script](https://img.shields.io/badge/Backend-Google_Apps_Script-blue.svg)](gas/)
 
 *Read this in [English](#english-version).*
 
-Cet outil complet est destiné aux **Product Experts (PE) Google** pour automatiser la gestion, le suivi et la réponse aux questions (threads) de la Google Community Console directement depuis Google Sheets et Google Chrome grâce à l'IA **Google Gemini**.
+Cet outil complet est destiné aux **Product Experts (PE) Google** pour automatiser la gestion, le suivi et la réponse aux questions (threads) de la Google Community Console directement depuis Google Sheets, Google Chrome et vos appareils mobiles (iPhone/iPad).
 
 ---
 
@@ -15,8 +15,9 @@ Cet outil complet est destiné aux **Product Experts (PE) Google** pour automati
 
 ### 🚀 Fonctionnalités & Avancées Récents
 
-#### 📱 Extension Chrome (Manifest V3)
-- **Bouton flottant "📌 Suivre dans Sheets"** : Injecté automatiquement sur les pages des threads (`https://support.google.com/s/community/forum/.../thread/...`).
+#### 📱 Extension Chrome & Bookmarklet Mobile iOS
+- **Bouton flottant "📌 Suivre dans Sheets"** : Injecté automatiquement sur les pages des threads desktop.
+- **Support Mobile iPhone/iPad (`mobile/bookmarklet.js`)** : Favori JavaScript intelligent (Bookmarklet) permettant de déclencher l'analyse Gemini et le suivi directement depuis Chrome ou Safari sur iPhone.
 - **Extraction automatique du DOM** : Titre, auteur, produit Google concerné, corps de la question et détails techniques.
 - **Service Worker d'Arrière-Plan (`background.js`)** : Gestion asynchrone des requêtes HTTP Cross-Origin vers Google Apps Script sans blocage CORS.
 - **Placement Automatique de la Réponse** :

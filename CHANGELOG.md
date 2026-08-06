@@ -2,6 +2,17 @@
 
 Toutes les modifications notables apportées à ce projet sont documentées dans ce fichier.
 
+## [1.4.0] - 2026-08-06
+
+### 📱 Support Mobile iPhone / iPad (Bookmarklet iOS)
+
+> **Vous n'êtes pas toujours derrière votre ordinateur quand les utilisateurs sollicitent l'assistance.**  
+> Pouvoir traiter un fil de discussion depuis son iPhone tout en bénéficiant de la puissance de Gemini et du suivi dans Google Sheets était impossible sans ordinateur.
+
+- **Bookmarklet JavaScript Mobile (`mobile/bookmarklet.js`)** : Solution en 1 clic utilisable dans Chrome ou Safari sur iPhone/iPad.
+- **Extraction & Envoi Mobile** : Déclenche l'analyse Gemini et la sauvegarde dans Google Sheets directement depuis le navigateur mobile.
+- **Injection & Presse-papier sur Mobile** : Pré-remplit le champ de réponse mobile ou copie le résumé généré dans le presse-papier avec notification visuelle (`Toast`).
+
 ## [1.3.3] - 2026-08-04
 
 ### 💬 Alignement sur les Recommandations Google CM (Perte d'Accès Compte Google)
