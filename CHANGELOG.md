@@ -2,6 +2,16 @@
 
 Toutes les modifications notables apportées à ce projet sont documentées dans ce fichier.
 
+## [1.4.1] - 2026-08-06
+
+### 🛠️ Correction du Bookmarklet Mobile (Navigation Page Blanche iOS)
+
+> **Rien de plus déroutant que de cliquer sur un favori mobile et de voir s'ouvrir une page blanche.**  
+> Sur iOS (Safari et Chrome), l'évaluation des fonctions asynchrones dans l'URL d'un favori entraîne la navigation vers une page vierge.
+
+- **Enveloppement `javascript:void(...)`** : Correction de l'IIFE du Bookmarklet pour bloquer la redirection de page et maintenir l'affichage sur le thread Google Community Console.
+- **Affichage dynamique préservé** : L'overlay de statut (`Toast`) s'affiche désormais parfaitement au-dessus de la page mobile.
+
 ## [1.4.0] - 2026-08-06
 
 ### 📱 Support Mobile iPhone / iPad (Bookmarklet iOS)
