@@ -271,7 +271,8 @@ Si la question concerne une perte d'accès à un Compte Google ou une impossibil
       // Valider et filtrer les URL pour éliminer les erreurs 404
       const technicalResponse = cleanAndValidateUrls(rawText, candidate);
 
-      const lang = detectLanguage(content);
+      // Détecter la langue en analysant à la fois le contenu et la réponse technique générée par Gemini
+      const lang = detectLanguage((content || "") + "\n" + (technicalResponse || ""));
       const displayName = authorName;
 
       return buildFormattedResponse(lang, displayName, product, technicalResponse);
@@ -286,18 +287,19 @@ Si la question concerne une perte d'accès à un Compte Google ou une impossibil
 
 /**
  * Détecte la langue principale du texte (français, anglais, allemand, espagnol, italien).
- * @param {string} text Le texte à analyser
+ * S'appuie sur un vocabulaire discriminatif sans chevauchement entre langues pour éviter les erreurs.
+ * @param {string} text Le texte à analyser (combine la question et la réponse technique)
  * @returns {string} Code de langue ('fr', 'en', 'de', 'es', 'it')
  */
 function detectLanguage(text) {
   if (!text || typeof text !== 'string') return 'fr';
 
   const wordLists = {
-    fr: /\b(le|la|les|un|une|des|et|du|en|est|dans|pour|sur|avec|par|ce|cette|que|qui|pas|mon|ma|mes|bonjour|souhaite|compte|problème|comment|merci)\b/gi,
-    en: /\b(the|is|and|to|in|you|that|it|of|for|on|with|as|this|was|at|by|an|be|from|or|have|my|not|your|can|how|what|why|help|account|issue|problem|please)\b/gi,
-    de: /\b(der|die|das|und|ist|in|den|von|zu|mit|sich|des|auf|für|im|dem|nicht|ein|eine|einer|einem|als|auch|es|an|werden|aus|er|hat|dass|sie|nach|wie|bitte|konto|problem|hilfe|hallo)\b/gi,
-    es: /\b(el|la|los|las|un|una|unos|unas|y|de|en|que|es|por|para|con|no|su|sus|como|mas|pero|le|ya|este|esta|hola|cuenta|problema|ayuda|gracias)\b/gi,
-    it: /\b(il|lo|la|i|gli|le|un|uno|una|e|di|da|in|con|su|per|tra|fra|che|non|si|del|della|dei|delle|questo|questa|come|ciao|conto|problema|aiuto|grazie)\b/gi
+    fr: /\b(vous|votre|vos|nous|notre|nos|dans|avec|pour|plus|pas|cette|sont|avez|êtes|fait|faire|bonjour|merci|compte|réponse|problème|souhaite|étapes)\b/gi,
+    en: /\b(you|your|yours|we|our|ours|with|for|more|not|this|are|have|been|do|make|hello|thanks|account|answer|issue|problem|steps|please)\b/gi,
+    de: /\b(sie|ihr|ihre|wir|unser|mit|für|mehr|nicht|diese|sind|haben|sein|tun|machen|hallo|danke|konto|antwort|problem|hilfe|bitte|schritte)\b/gi,
+    es: /\b(usted|ustedes|su|sus|nosotros|nuestro|con|para|más|esta|están|hola|gracias|cuenta|respuesta|problema|ayuda|hacer|tengo|pasos)\b/gi,
+    it: /\b(voi|vostro|vostra|noi|nostro|con|per|più|non|questa|sono|avete|ciao|grazie|conto|risposta|problema|aiuto|fare|passi)\b/gi
   };
 
   const scores = { fr: 0, en: 0, de: 0, es: 0, it: 0 };

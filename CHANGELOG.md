@@ -2,6 +2,16 @@
 
 Toutes les modifications notables apportées à ce projet sont documentées dans ce fichier.
 
+## [1.5.2] - 2026-08-06
+
+### 🛠️ Correction de la Détection Multilingue (Élimination des Faux Positifs Espagnols)
+
+> **Rien de plus incohérent qu'un message d'accueil et de signature en espagnol autour d'un corps de texte rédigé en français.**  
+> Les petits mots communs (la, de, en, un) provoquaient un chevauchement entre la détection du français et de l'espagnol sur certains textes courts.
+
+- **Refonte du dictionnaire de détection (`detectLanguage`)** : Utilisation d'un vocabulaire discriminatif strict (`vous`, `votre`, `dans`, `pour`, `compte`...) bannissant tout chevauchement entre les langues.
+- **Analyse combinée Question + Réponse Gemini** : La détection s'appuie désormais à la fois sur le texte de la question et sur le corps de texte généré par Gemini pour garantir un alignement linguistique parfait à 100%.
+
 ## [1.5.1] - 2026-08-06
 
 ### 🛠️ Extraction Dynamique du Nom de l'Auteur sur WebApp Mobile
