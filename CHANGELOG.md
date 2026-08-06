@@ -2,6 +2,18 @@
 
 Toutes les modifications notables apportées à ce projet sont documentées dans ce fichier.
 
+## [1.5.0] - 2026-08-06
+
+### 📱 Lancement de la WebApp Mobile Autonome pour iPhone / iPad
+
+> **Pouvoir utiliser l'outil sur iPhone sans aucune restriction technique ni blocage de navigateur.**  
+> Plutôt que de subir les blocages des favoris ou des extensions sur iOS, une véritable interface WebApp dédiée s'installe directement sur l'écran d'accueil de votre iPhone comme une application native.
+
+- **Interface Mobile Autonome (`gas/MobileUi.html`)** : Interface dédiée en Material Design 3 (Glassmorphism) avec champ de saisie d'URL, bouton d'analyse et affichage de la réponse IA.
+- **Extraction automatique côté serveur (`gas/MobileBackend.gs`)** : Extraction automatique du titre, du produit et du contenu directement par les serveurs Google (`UrlFetchApp`) pour contourner 100% des blocages CSP.
+- **Bouton de copie rapide de la réponse** : Copie en 1 touche de la réponse générée par Gemini pour la coller directement dans le forum.
+- **Installation en App sur l'écran d'accueil iPhone** : Ajout en 1 clic sur l'écran d'accueil iOS via *"Sur l'écran d'accueil"*.
+
 ## [1.4.2] - 2026-08-06
 
 ### 🛠️ Compatibilité Chrome iOS (Omnibox & Raccourcis Apple iOS)

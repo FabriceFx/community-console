@@ -79,11 +79,21 @@ function doPost(e) {
 }
 
 /**
- * Point d'entrée pour tester si l'URL est valide
+ * Point d'entrée pour la WebApp Mobile (iPhone/iPad/Navigateurs)
+ * Servit automatiquement lorsqu'un utilisateur ouvre l'URL WebApp dans son navigateur mobile
  */
 function doGet(e) {
-  return ContentService.createTextOutput(JSON.stringify({
-    status: "success",
-    message: "L'API Community Console PE Tracker est fonctionnelle."
-  })).setMimeType(ContentService.MimeType.JSON);
+  if (e && e.parameter && e.parameter.api === 'json') {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "success",
+      message: "L'API Community Console PE Tracker est fonctionnelle."
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  const template = HtmlService.createTemplateFromFile('MobileUi');
+  return template.evaluate()
+    .setTitle('Suivi PE - Community Console Mobile')
+    .setFaviconUrl('https://www.gstatic.com/images/branding/product/1x/sheets_48dp.png')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
