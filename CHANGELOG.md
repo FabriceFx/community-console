@@ -2,6 +2,16 @@
 
 Toutes les modifications notables apportées à ce projet sont documentées dans ce fichier.
 
+## [1.5.1] - 2026-08-06
+
+### 🛠️ Extraction Dynamique du Nom de l'Auteur sur WebApp Mobile
+
+> **Personnaliser l'accueil d'une réponse avec le vrai nom de l'utilisateur.**  
+> Récupérer le vrai nom de la personne ayant posé la question sur le forum est essentiel pour que les formules d'accueil Gemini ("Bonjour [Nom]") soient parfaites.
+
+- **Extraction JSON-LD & Meta HTML (`gas/MobileBackend.gs`)** : Analyse automatique des données structurées schema.org (`DiscussionForumPosting`), des balises meta `author` et des classes CSS du forum pour capturer le nom réel de l'auteur lors de la soumission d'une URL sur mobile.
+- **Réponses IA totalement personnalisées** : Gemini reçoit directement le vrai nom de l'auteur au lieu d'une valeur générique.
+
 ## [1.5.0] - 2026-08-06
 
 ### 📱 Lancement de la WebApp Mobile Autonome pour iPhone / iPad

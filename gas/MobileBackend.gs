@@ -63,7 +63,49 @@ function processMobileThreadUrl(threadUrl) {
     content = title;
   }
 
-  const author = "Utilisateur Mobile";
+  // 4. Extraire le nom de l'auteur de la question (JSON-LD, meta et classes HTML)
+  let author = "";
+  const jsonLdMatch = htmlText.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
+  if (jsonLdMatch) {
+    for (const tag of jsonLdMatch) {
+      try {
+        const jsonContent = tag.replace(/<script[^>]*>/i, '').replace(/<\/script>/i, '');
+        const parsed = JSON.parse(jsonContent);
+        if (parsed.author && parsed.author.name) {
+          author = parsed.author.name.trim();
+          break;
+        }
+        if (parsed.creator && parsed.creator.name) {
+          author = parsed.creator.name.trim();
+          break;
+        }
+        if (Array.isArray(parsed) && parsed[0] && parsed[0].author && parsed[0].author.name) {
+          author = parsed[0].author.name.trim();
+          break;
+        }
+      } catch (e) {}
+    }
+  }
+
+  if (!author) {
+    const metaAuthor = htmlText.match(/<meta\s+name=["']author["']\s+content=["']([^"']+)["']/i) ||
+                       htmlText.match(/property=["']author["']\s+content=["']([^"']+)["']/i);
+    if (metaAuthor && metaAuthor[1]) {
+      author = metaAuthor[1].trim();
+    }
+  }
+
+  if (!author) {
+    const authorRegex = /(?:class=["'][^"']*scTailwindThreadPost_headerUserinfoname[^"']*["'][^>]*>|data-stats-id=["']user-name["'][^>]*>|class=["'][^"']*user-name[^"']*["'][^>]*>)([^<]+)/i;
+    const authorMatch = htmlText.match(authorRegex);
+    if (authorMatch && authorMatch[1]) {
+      author = authorMatch[1].trim();
+    }
+  }
+
+  if (!author) {
+    author = "Utilisateur inconnu";
+  }
 
   // 4. Générer la réponse via l'IA Gemini
   const summary = generateSummaryWithGemini(content, author, product);
