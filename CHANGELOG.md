@@ -2,6 +2,16 @@
 
 Toutes les modifications notables apportées à ce projet sont documentées dans ce fichier.
 
+## [1.4.2] - 2026-08-06
+
+### 🛠️ Compatibilité Chrome iOS (Omnibox & Raccourcis Apple iOS)
+
+> **Chrome sur iPhone bloque l'exécution directe du JS depuis le menu Favoris pour des raisons de sécurité.**  
+> Taper le nom du favori dans la barre d'adresse Chrome ou utiliser le bouton Partager via un Raccourci iOS natif résout définitivement ce blocage.
+
+- **Refonte ES5 XMLHttpRequest** : Version synchrone ultra-compatible sans `async/await` pour contourner les restrictions d'exécution mobile.
+- **Raccourci iOS Natif (Bouton Partager)** : Documentation de la méthode native iOS fonctionnant dans Chrome et Safari via le menu "Partager".
+
 ## [1.4.1] - 2026-08-06
 
 ### 🛠️ Correction du Bookmarklet Mobile (Navigation Page Blanche iOS)

@@ -1,16 +1,19 @@
 /**
- * Bookmarklet Mobile (iPhone / iPad / Chrome & Safari iOS) v1.4.1
- * Permet d'envoyer un thread de la Google Community Console vers Google Sheets
- * et de préparer la réponse générée par Gemini depuis un navigateur mobile.
+ * PE Tracker - Solutions Mobile (iPhone / iPad iOS) v1.4.2
+ * 
+ * Option 1 : Raccourci Apple iOS (Raccourcis / Shortcuts App) - RECOMMANDE SUR CHROME iOS
+ * Option 2 : Bookmarklet JavaScript Standard ES5 (Safari iOS)
  */
 
-// --- CODE MINIFIÉ ET SÉCURISÉ (VOID) À COPIER DANS VOTRE FAVORI MOBILE (champ URL) :
-// javascript:void((async function(){const e='PE_TRACKER_WEBAPP_URL';let t=localStorage.getItem(e);if(!t){if(t=prompt("Entrez l'URL de votre WebApp Google Apps Script (finissant par /exec) :"),!t)return;t=t.trim(),localStorage.setItem(e,t)}let n=document.getElementById('pe-mobile-toast');n||(n=document.createElement('div'),n.id='pe-mobile-toast',n.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:999999;background:#1a73e8;color:#fff;padding:12px 20px;border-radius:24px;font-family:sans-serif;font-size:14px;font-weight:bold;box-shadow:0 4px 12px rgba(0,0,0,0.3);text-align:center;max-width:90%;transition:all 0.3s;',document.body.appendChild(n)),n.innerText='⏳ Analyse Gemini & Envoi...',n.style.background='#1a73e8';try{let o=document.title,i=document.querySelector('.scTailwindThreadQuestionQuestioncardtitle, h1');i&&(o=i.innerText.trim());let a='Auteur inconnu',r=document.querySelector('.scTailwindThreadPost_headerUserinfoname, .user-name, [data-stats-id="user-name"]');r&&(a=r.innerText.trim());let c='Inconnu',s=document.querySelector('.scTailwindThreadQuestionForumtitleroot, a[href*="/forum/"]');s&&(c=s.innerText.trim());let l='',d=document.querySelector('.scTailwindThreadPostcontentroot, .message-content, .thread-message-content');if(d)l=d.innerText.trim();else{let p=Array.from(document.querySelectorAll('p')).map(e=>e.innerText.trim()).filter(Boolean);l=p.join('\n\n')}const m={title:o,url:window.location.href,author:a,product:c,content:l.substring(0,1500)},u=await fetch(t,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(m)}),g=await u.json(),f=g&&g.summary?g.summary:'';if(f){try{await navigator.clipboard.writeText(f)}catch(y){}let T=document.querySelector('[contenteditable="true"], textarea, [role="textbox"]');if(!T){const w=document.querySelector('button[aria-label*="Répondre"], button[aria-label*="Reply"], .scTailwindThreadPostReplybutton');w&&(w.click(),await new Promise(e=>setTimeout(e,1500)),T=document.querySelector('[contenteditable="true"], textarea, [role="textbox"]'))}T?(T.focus(),T.isContentEditable||'true'===T.getAttribute('contenteditable')?T.innerText=f:T.value=f,T.dispatchEvent(new Event('input',{bubbles:!0})),n.innerText='✅ Thread enregistré & Réponse insérée !'):n.innerText='✅ Thread enregistré ! (Réponse copiée 📋)'}else n.innerText='✅ Thread enregistré dans Sheets !';n.style.background='#0f9d58'}catch(b){console.error("Erreur Bookmarklet",b),n.innerText="❌ Erreur d'envoi",n.style.background='#d93025'}setTimeout(()=>{n&&n.parentNode&&n.parentNode.removeChild(n)},4000)})());
+// --- OPTION 1 : CODE DU BOOKMARKLET ES5 COMPATIBLE SAFARI iOS ---
+// (Si Chrome iOS bloque le clic direct depuis les favoris, utilisez la méthode Omnibox ou le Raccourci iOS)
+//
+// javascript:(function(){var k='PE_TRACKER_WEBAPP_URL',u=localStorage.getItem(k);if(!u){u=prompt("URL WebApp Apps Script (/exec) :");if(!u)return;u=u.trim();localStorage.setItem(k,u);}var t=document.getElementById('pe-toast');if(!t){t=document.createElement('div');t.id='pe-toast';t.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:999999;background:#1a73e8;color:#fff;padding:12px 20px;border-radius:24px;font-family:sans-serif;font-size:14px;font-weight:bold;box-shadow:0 4px 12px rgba(0,0,0,0.3);text-align:center;max-width:90%;';document.body.appendChild(t);}t.innerText='⏳ Analyse Gemini & Envoi...';t.style.background='#1a73e8';var h=document.querySelector('.scTailwindThreadQuestionQuestioncardtitle, h1'),title=h?h.innerText.trim():document.title;var a=document.querySelector('.scTailwindThreadPost_headerUserinfoname, .user-name'),author=a?a.innerText.trim():'Auteur inconnu';var p=document.querySelector('.scTailwindThreadQuestionForumtitleroot, a[href*="/forum/"]'),product=p?p.innerText.trim():'Inconnu';var c=document.querySelector('.scTailwindThreadPostcontentroot, .message-content'),content=c?c.innerText.trim():'';var payload=JSON.stringify({title:title,url:window.location.href,author:author,product:product,content:content.substring(0,1500)});var xhr=new XMLHttpRequest();xhr.open('POST',u,true);xhr.setRequestHeader('Content-Type','text/plain;charset=utf-8');xhr.onreadystatechange=function(){if(xhr.readyState===4){if(xhr.status>=200&&xhr.status<400){try{var res=JSON.parse(xhr.responseText);var s=res.summary||'';if(s){t.innerText='✅ Thread enregistré dans Sheets !';t.style.background='#0f9d58';alert('✅ Réponse IA générée :\n\n'+s);}else{t.innerText='✅ Enregistré dans Sheets !';t.style.background='#0f9d58';}}catch(e){t.innerText='✅ Enregistré !';t.style.background='#0f9d58';}}else{t.innerText='❌ Erreur '+xhr.status;t.style.background='#d93025';}setTimeout(function(){if(t&&t.parentNode)t.parentNode.removeChild(t);},4000);}};xhr.send(payload);})();
 
-// --- SOURCE JS LISIBLE (Non minifiée) :
-javascript:void((async function() {
-  const STORAGE_KEY = 'PE_TRACKER_WEBAPP_URL';
-  let webappUrl = localStorage.getItem(STORAGE_KEY);
+// --- SOURCE JS COMPLÈTE LISIBLE ---
+(function() {
+  var STORAGE_KEY = 'PE_TRACKER_WEBAPP_URL';
+  var webappUrl = localStorage.getItem(STORAGE_KEY);
 
   if (!webappUrl) {
     webappUrl = prompt("Entrez l'URL de votre WebApp Google Apps Script (finissant par /exec) :");
@@ -22,94 +25,65 @@ javascript:void((async function() {
     }
   }
 
-  // Notification visuelle mobile (Overlay Toast)
-  let notify = document.getElementById('pe-mobile-toast');
-  if (!notify) {
-    notify = document.createElement('div');
-    notify.id = 'pe-mobile-toast';
-    notify.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:999999;background:#1a73e8;color:#fff;padding:12px 20px;border-radius:24px;font-family:sans-serif;font-size:14px;font-weight:bold;box-shadow:0 4px 12px rgba(0,0,0,0.3);text-align:center;max-width:90%;transition:all 0.3s;';
-    document.body.appendChild(notify);
+  var toast = document.getElementById('pe-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'pe-toast';
+    toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:999999;background:#1a73e8;color:#fff;padding:12px 20px;border-radius:24px;font-family:sans-serif;font-size:14px;font-weight:bold;box-shadow:0 4px 12px rgba(0,0,0,0.3);text-align:center;max-width:90%;';
+    document.body.appendChild(toast);
   }
-  notify.innerText = '⏳ Analyse Gemini & Envoi...';
-  notify.style.background = '#1a73e8';
+  toast.innerText = '⏳ Analyse Gemini & Envoi...';
+  toast.style.background = '#1a73e8';
 
-  try {
-    let title = document.title;
-    const titleEl = document.querySelector('.scTailwindThreadQuestionQuestioncardtitle, h1');
-    if (titleEl) title = titleEl.innerText.trim();
+  var hEl = document.querySelector('.scTailwindThreadQuestionQuestioncardtitle, h1');
+  var title = hEl ? hEl.innerText.trim() : document.title;
 
-    let author = "Auteur inconnu";
-    const authorEl = document.querySelector('.scTailwindThreadPost_headerUserinfoname, .user-name, [data-stats-id="user-name"]');
-    if (authorEl) author = authorEl.innerText.trim();
+  var aEl = document.querySelector('.scTailwindThreadPost_headerUserinfoname, .user-name');
+  var author = aEl ? aEl.innerText.trim() : 'Auteur inconnu';
 
-    let product = "Inconnu";
-    const productEl = document.querySelector('.scTailwindThreadQuestionForumtitleroot, a[href*="/forum/"]');
-    if (productEl) product = productEl.innerText.trim();
+  var pEl = document.querySelector('.scTailwindThreadQuestionForumtitleroot, a[href*="/forum/"]');
+  var product = pEl ? pEl.innerText.trim() : 'Inconnu';
 
-    let content = "";
-    const contentEl = document.querySelector('.scTailwindThreadPostcontentroot, .message-content, .thread-message-content');
-    if (contentEl) content = contentEl.innerText.trim();
-    else {
-      const ps = Array.from(document.querySelectorAll('p')).map(p => p.innerText.trim()).filter(Boolean);
-      content = ps.join('\n\n');
-    }
+  var cEl = document.querySelector('.scTailwindThreadPostcontentroot, .message-content');
+  var content = cEl ? cEl.innerText.trim() : '';
 
-    const payload = {
-      title: title,
-      url: window.location.href,
-      author: author,
-      product: product,
-      content: content.substring(0, 1500)
-    };
+  var payload = JSON.stringify({
+    title: title,
+    url: window.location.href,
+    author: author,
+    product: product,
+    content: content.substring(0, 1500)
+  });
 
-    const response = await fetch(webappUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload)
-    });
-
-    const data = await response.json();
-    const summary = data && data.summary ? data.summary : "";
-
-    if (summary) {
-      try {
-        await navigator.clipboard.writeText(summary);
-      } catch (e) {}
-
-      let editor = document.querySelector('[contenteditable="true"], textarea, [role="textbox"]');
-      if (!editor) {
-        const btn = document.querySelector('button[aria-label*="Répondre"], button[aria-label*="Reply"], .scTailwindThreadPostReplybutton');
-        if (btn) {
-          btn.click();
-          await new Promise(r => setTimeout(r, 1500));
-          editor = document.querySelector('[contenteditable="true"], textarea, [role="textbox"]');
+  var xhr = new XMLHttpRequest();
+  xhr.open('POST', webappUrl, true);
+  xhr.setRequestHeader('Content-Type', 'text/plain;charset=utf-8');
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState === 4) {
+      if (xhr.status >= 200 && xhr.status < 400) {
+        try {
+          var res = JSON.parse(xhr.responseText);
+          var s = res.summary || '';
+          if (s) {
+            toast.innerText = '✅ Thread enregistré dans Sheets !';
+            toast.style.background = '#0f9d58';
+            alert('✅ Réponse IA générée :\n\n' + s);
+          } else {
+            toast.innerText = '✅ Enregistré dans Sheets !';
+            toast.style.background = '#0f9d58';
+          }
+        } catch (e) {
+          toast.innerText = '✅ Enregistré !';
+          toast.style.background = '#0f9d58';
         }
-      }
-
-      if (editor) {
-        editor.focus();
-        if (editor.isContentEditable || editor.getAttribute('contenteditable') === 'true') {
-          editor.innerText = summary;
-        } else {
-          editor.value = summary;
-        }
-        editor.dispatchEvent(new Event('input', { bubbles: true }));
-        notify.innerText = '✅ Thread enregistré & Réponse insérée !';
       } else {
-        notify.innerText = '✅ Thread enregistré ! (Réponse copiée 📋)';
+        toast.innerText = '❌ Erreur ' + xhr.status;
+        toast.style.background = '#d93025';
       }
-    } else {
-      notify.innerText = '✅ Thread enregistré dans Sheets !';
+      setTimeout(function() {
+        if (toast && toast.parentNode) toast.parentNode.removeChild(toast);
+      }, 4000);
     }
-    notify.style.background = '#0f9d58';
-
-  } catch (err) {
-    console.error("Erreur Bookmarklet PE Tracker", err);
-    notify.innerText = "❌ Erreur d'envoi";
-    notify.style.background = '#d93025';
-  }
-
-  setTimeout(() => {
-    if (notify && notify.parentNode) notify.parentNode.removeChild(notify);
-  }, 4000);
-})());
+  };
+  xhr.send(payload);
+})();
