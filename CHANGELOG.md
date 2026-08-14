@@ -2,6 +2,16 @@
 
 Toutes les modifications notables apportées à ce projet sont documentées dans ce fichier.
 
+## [1.5.4] - 2026-08-14
+
+### 🧠 Passage au Modèle d'IA Gemini 3.7 Flash
+
+> **Des réponses encore plus précises, instantanées et parfaitement contextualisées dès la première lecture.**  
+> Obtenir une assistance IA qui saisit instantanément les subtilités d'une demande technique complexe, applique le raisonnement adapté et fournit des sources officielles infaillibles sans délai d'attente.
+
+- **Intégration du Modèle Gemini 3.7 Flash** : Mise à niveau de la configuration et des recommandations de modèles pour bénéficier d'une meilleure compréhension contextuelle des requêtes d'entraide et d'une formulation encore plus fluide des réponses.
+- **Mise à jour des interfaces et de la documentation** : Actualisation des guides, des placeholders de configuration dans la barre latérale Apps Script et des règles du projet.
+
 ## [1.5.3] - 2026-08-06
 
 ### 👤 Optimisation de la Récupération des Prénoms / Auteurs sur WebApp Mobile
