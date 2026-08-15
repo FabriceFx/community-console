@@ -2,6 +2,19 @@
 
 Toutes les modifications notables apportées à ce projet sont documentées dans ce fichier.
 
+## [1.8.1] - 2026-08-15
+
+### 🌍 Cohérence Linguistique de la Ligne de Récupération
+
+> **Une réponse rédigée en anglais se terminait par « Procédure officielle de récupération : https://g.co/recover ».**
+> Les consignes du prompt étant écrites en français, la 1.6.1 imposait cette ligne « à ce format exact » : le modèle la recopiait telle quelle, quelle que soit la langue du message.
+
+- **Intitulé localisé dans la consigne (`gas/Gemini.gs`)** : L'URL reste invariable, mais l'intitulé est désormais fourni dans les cinq langues gérées, avec obligation de le traduire pour toute autre langue.
+- **Règle générale de langue** : Ajout d'une consigne explicite indiquant que les gabarits de phrases donnés en français dans les instructions sont à traduire, jamais à recopier — la même confusion pouvait toucher les intitulés de sources.
+- **Filet de rattrapage (`localiserLigneRecuperation_`)** : Après génération, l'intitulé de la ligne de récupération est réaligné sur la langue détectée du message. Une consigne peut toujours déraper ; ce correctif s'applique quoi qu'il arrive.
+- **Réécriture prudente** : Seules les lignes de la forme « intitulé : URL » sont retouchées. Une mention du lien insérée dans une phrase est laissée intacte, car elle est déjà dans la bonne langue et la réécrire casserait la phrase. La ponctuation finale et la forme canonique de l'URL sont préservées.
+- **Couverture de test (`tests/06-coherence-langue.test.js`)** : 16 cas, dont le cas réel rencontré en production, l'idempotence et les langues non gérées.
+
 ## [1.8.0] - 2026-08-15
 
 ### 🪞 Seules les Réponses Retouchées Alimentent le Style

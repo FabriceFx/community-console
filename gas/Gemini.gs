@@ -447,6 +447,7 @@ CONFIANCE ne peut être HAUTE que si tu t'appuies sur une source vérifiée ou s
 
 STYLE DU MESSAGE
 - N'écris ni salutation d'ouverture ni formule de clôture ni signature : elles sont ajoutées automatiquement autour de ton texte. Commence directement par le fond.
+- TOUT ce que tu rédiges est dans la langue du message d'origine, sans aucune exception : le corps, mais aussi les intitulés de liens et de sources. Les modèles de phrases donnés plus bas dans ces consignes sont écrits en français pour t'être expliqués ; ce sont des gabarits à traduire, jamais des chaînes à recopier telles quelles.
 - 150 mots maximum. 60 mots maximum en mode CLARIFICATION. La ou les lignes de sources ne comptent pas dans cette limite : ne sacrifie jamais un lien officiel pour tenir dans le quota de mots.
 - Commence par ce qui débloque réellement la personne, pas par du contexte ni par une reformulation de sa question.
 - Si tu reprends un fait précis de son message, fais-le en une demi-phrase, pas en paragraphe.
@@ -473,8 +474,15 @@ Ne répète jamais une donnée personnelle présente dans la question. Si le mes
 CAS PARTICULIER — PERTE D'ACCÈS À UN COMPTE GOOGLE
 Reprends en une demi-phrase les moyens de récupération que la personne indique avoir perdus. Si la récupération est manifestement impossible au vu de ces éléments, annonce-le dès la première phrase. Explique la contrainte en une phrase : le système automatisé exige au moins un moyen de récupération actif pour prouver la propriété du compte.
 
-Termine TOUJOURS ce type de réponse par la procédure officielle, sur sa propre ligne et à ce format exact :
-Procédure officielle de récupération : https://g.co/recover
+Termine TOUJOURS ce type de réponse par la procédure officielle, sur sa propre ligne, au format « intitulé : URL ».
+L'URL est invariable : https://g.co/recover
+L'INTITULÉ, lui, DOIT être rédigé dans la langue du message. Emploie exactement celui qui correspond :
+- français : Procédure officielle de récupération : https://g.co/recover
+- anglais : Official account recovery process: https://g.co/recover
+- allemand : Offizielles Verfahren zur Kontowiederherstellung: https://g.co/recover
+- espagnol : Procedimiento oficial de recuperación: https://g.co/recover
+- italien : Procedura ufficiale di recupero: https://g.co/recover
+Pour toute autre langue, traduis l'intitulé dans cette langue. Ne recopie jamais un intitulé français dans un message qui n'est pas en français.
 
 C'est le seul canal existant : aucune autre voie, aucun formulaire alternatif, aucun contact humain ne permet de récupérer un compte Google, et il n'existe pas de support téléphonique pour cela. Ne propose jamais de solution de contournement.
 Ce lien ne remplace pas la réponse : il la termine. Un message qui se limiterait à ce lien serait sans valeur.
@@ -578,6 +586,51 @@ function humanizeBody_(body) {
   text = text.replace(/\n{3,}/g, '\n\n');
 
   return text.trim();
+}
+
+/**
+ * Intitulés localisés de la ligne renvoyant vers la procédure officielle de récupération.
+ */
+const RECOVERY_LABELS = {
+  fr: "Procédure officielle de récupération",
+  en: "Official account recovery process",
+  de: "Offizielles Verfahren zur Kontowiederherstellung",
+  es: "Procedimiento oficial de recuperación",
+  it: "Procedura ufficiale di recupero"
+};
+
+/**
+ * Force l'intitulé de la ligne de récupération dans la langue du message.
+ *
+ * Les consignes du prompt sont rédigées en français : le modèle a tendance à recopier
+ * l'intitulé tel quel, y compris au milieu d'une réponse anglaise. Ce filet corrige
+ * l'incohérence après coup, quelle que soit la langue produite.
+ *
+ * Seules les lignes de la forme « intitulé : URL » sont réécrites. Une mention du lien
+ * insérée dans une phrase est laissée intacte : elle est déjà dans la bonne langue,
+ * et la réécrire casserait la phrase.
+ *
+ * @param {string} body Le corps du message
+ * @param {string} lang Le code de langue du message
+ * @returns {string} Le corps avec l'intitulé de récupération localisé
+ */
+function localiserLigneRecuperation_(body, lang) {
+  if (!body || body.indexOf('g.co/recover') === -1) return body;
+
+  const label = RECOVERY_LABELS[lang];
+  // Langue hors de la liste : le modèle a traduit lui-même, on ne touche à rien
+  if (!label) return body;
+
+  return String(body).split('\n').map((line) => {
+    const match = line.match(/^(\s*)(.+?)\s*[:：]\s*(https?:\/\/\S*g\.co\/recover\S*?)([.,;!?]*)\s*$/i);
+    if (!match) return line;
+
+    const indent = match[1];
+    const url = canonicalTrustedUrl_(match[3]);
+    const trailing = match[4] || '';
+
+    return `${indent}${label} : ${url}${trailing}`;
+  }).join('\n');
 }
 
 /**
@@ -886,12 +939,16 @@ ${sanitizedContent}
         ? envelope.lang
         : detectLanguage((content || "") + "\n" + humanized);
 
+      // Les consignes du prompt étant en français, l'intitulé de la ligne de récupération
+      // peut être recopié tel quel dans une réponse d'une autre langue : on le réaligne.
+      const localise = localiserLigneRecuperation_(humanized, lang);
+
       return {
         ok: true,
         status: envelope.status,
         confidence: envelope.confidence,
         lang: lang,
-        text: buildFormattedResponse(lang, authorName, product, humanized, envelope.status)
+        text: buildFormattedResponse(lang, authorName, product, localise, envelope.status)
       };
     }
 
