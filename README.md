@@ -1,6 +1,6 @@
 # Outil de suivi Community Console (PE Tracker)
 
-[![Version](https://img.shields.io/badge/version-1.10.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.10.1-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Chrome MV3](https://img.shields.io/badge/Chrome-Manifest_V3-green.svg)](extension/manifest.json)
 [![Google Apps Script](https://img.shields.io/badge/Backend-Google_Apps_Script-blue.svg)](gas/)
@@ -88,7 +88,8 @@ Cet outil complet est destiné aux **Product Experts (PE) Google** pour automati
 1. Ouvrez Chrome et rendez-vous sur `chrome://extensions/`.
 2. Activez le **Mode développeur** (en haut à droite).
 3. Cliquez sur **Charger l'extension non empaquetée** et sélectionnez le dossier `extension/` du projet.
-4. Cliquez sur l'icône de l'extension installée, collez l'URL de votre WebApp Google Apps Script **et le secret partagé** généré à l'étape précédente.
+4. Cliquez sur l'icône de l'extension installée, collez l'URL de votre WebApp Google Apps Script, **le secret partagé** généré à l'étape précédente, et **votre nom d'affichage sur le forum** (par exemple `Fabrice_Fx`).
+   - Ce nom permet de repérer vos propres messages dans un fil pour traiter les relances. Recopiez-le exactement tel qu'il apparaît sous vos réponses.
 
 ---
 

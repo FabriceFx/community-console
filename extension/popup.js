@@ -2,6 +2,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const webappUrlInput = document.getElementById('webappUrl');
   const geminiApiKeyInput = document.getElementById('geminiApiKey');
   const sharedSecretInput = document.getElementById('sharedSecret');
+  const peDisplayNameInput = document.getElementById('peDisplayName');
   const toggleKeyBtn = document.getElementById('toggleKeyBtn');
   const toggleSecretBtn = document.getElementById('toggleSecretBtn');
   const saveBtn = document.getElementById('saveBtn');
@@ -10,10 +11,10 @@ document.addEventListener('DOMContentLoaded', function() {
   // Charger la configuration existante.
   // chrome.storage.local (et non sync) : la clé API et le secret ne sont pas répliqués
   // en clair sur tous les appareils connectés au même profil Chrome.
-  chrome.storage.local.get(['webappUrl', 'geminiApiKey', 'sharedSecret'], function(result) {
+  chrome.storage.local.get(['webappUrl', 'geminiApiKey', 'sharedSecret', 'peDisplayName'], function(result) {
     const local = result || {};
 
-    if (local.webappUrl || local.geminiApiKey || local.sharedSecret) {
+    if (local.webappUrl || local.geminiApiKey || local.sharedSecret || local.peDisplayName) {
       applyConfig(local);
       return;
     }
@@ -33,6 +34,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (config.webappUrl) webappUrlInput.value = config.webappUrl;
     if (config.geminiApiKey) geminiApiKeyInput.value = config.geminiApiKey;
     if (config.sharedSecret) sharedSecretInput.value = config.sharedSecret;
+    if (config.peDisplayName) peDisplayNameInput.value = config.peDisplayName;
   }
 
   // Basculement entre masqué (password) et lisible (text)
@@ -52,6 +54,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const url = webappUrlInput.value.trim();
     const apiKey = geminiApiKeyInput.value.trim();
     const sharedSecret = sharedSecretInput.value.trim();
+    const peDisplayName = peDisplayNameInput.value.trim();
 
     if (url && !url.startsWith('https://script.google.com/')) {
       status.textContent = '⚠️ L\'URL doit commencer par https://script.google.com/';
@@ -68,7 +71,8 @@ document.addEventListener('DOMContentLoaded', function() {
     chrome.storage.local.set({
       webappUrl: url,
       geminiApiKey: apiKey,
-      sharedSecret: sharedSecret
+      sharedSecret: sharedSecret,
+      peDisplayName: peDisplayName
     }, function() {
       status.textContent = '✅ Configuration enregistrée avec succès !';
       status.style.color = '#0f9d58';

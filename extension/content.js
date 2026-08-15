@@ -479,10 +479,43 @@ function afficherBoutonCapture() {
 }
 
 /**
- * Extrait les messages du fil, dans l'ordre d'affichage.
- * @returns {Array<string>} Les textes des messages successifs
+ * Retrouve l'auteur d'un bloc de message en remontant dans ses ancêtres.
+ *
+ * On s'arrête dès qu'un ancêtre contient PLUSIEURS noms d'utilisateur : cela signifie
+ * qu'on a dépassé le message et atteint le conteneur du fil entier. Sans cette garde,
+ * tous les messages se verraient attribuer le nom du premier intervenant.
+ *
+ * @param {HTMLElement} contenu Le nœud de contenu du message
+ * @returns {string} Le nom de l'auteur, ou '' s'il est introuvable
  */
-function extraireMessagesDuFil() {
+function auteurDuBloc(contenu) {
+  const SELECTEUR_NOM = '.scTailwindThreadPost_headerUserinfoname, [data-stats-id="user-name"], .user-name, .scTailwindUserUsername';
+
+  let el = contenu;
+  let dernierNom = '';
+
+  for (let niveau = 0; niveau < 8 && el; niveau++) {
+    const noms = el.querySelectorAll ? Array.from(el.querySelectorAll(SELECTEUR_NOM)) : [];
+
+    if (noms.length === 1) {
+      dernierNom = (noms[0].innerText || '').trim();
+    } else if (noms.length > 1) {
+      // Conteneur englobant plusieurs messages : on ne monte pas plus haut
+      break;
+    }
+
+    el = el.parentElement;
+  }
+
+  return dernierNom;
+}
+
+/**
+ * Extrait le fil structuré : chaque message avec son auteur, dans l'ordre d'affichage.
+ *
+ * @returns {Array<{author: string, text: string}>}
+ */
+function extraireFilStructure() {
   const selecteurs = [
     '.scTailwindThreadPostcontentroot',
     '.scTailwindThreadMessageroot',
@@ -492,55 +525,108 @@ function extraireMessagesDuFil() {
 
   for (const sel of selecteurs) {
     const noeuds = Array.from(document.querySelectorAll(sel));
-    if (noeuds.length) {
-      return noeuds
-        .map((n) => (n.innerText || '').trim())
-        .filter((t) => t.length > 10);
-    }
+    if (!noeuds.length) continue;
+
+    const messages = noeuds
+      .map((n) => ({ author: auteurDuBloc(n), text: (n.innerText || '').trim() }))
+      .filter((m) => m.text.length > 10);
+
+    if (messages.length) return messages;
   }
 
   return [];
 }
 
 /**
- * Isole les messages postés APRÈS la réponse du Product Expert.
- *
- * On repère sa réponse par recouvrement de mots plutôt que par égalité stricte :
- * le forum reformate les retours à la ligne et les espaces, et le texte a pu être
- * retouché avant publication.
- *
- * @param {Array<string>} messages Les messages du fil dans l'ordre
- * @param {string} reponsePe La réponse publiée par le Product Expert
- * @returns {string} Les messages postérieurs, concaténés
+ * Conserve la compatibilité avec les appels ne nécessitant que les textes.
+ * @returns {Array<string>}
  */
-function isolerRelance(messages, reponsePe) {
-  if (!messages || !messages.length) return '';
+function extraireMessagesDuFil() {
+  return extraireFilStructure().map((m) => m.text);
+}
 
-  const normaliser = (t) => String(t || '').toLowerCase().replace(/\s+/g, ' ').trim();
-  const reference = normaliser(reponsePe);
+/**
+ * Compare deux noms d'affichage de façon tolérante (casse, accents, espaces).
+ * @param {string} a
+ * @param {string} b
+ * @returns {boolean}
+ */
+function memeAuteur(a, b) {
+  const normaliser = (v) => String(v || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]/g, '');
 
-  let indexPe = -1;
-  if (reference) {
-    const motsRef = reference.split(' ').filter((m) => m.length > 4);
+  const x = normaliser(a);
+  const y = normaliser(b);
+  return !!x && !!y && (x === y || x.indexOf(y) !== -1 || y.indexOf(x) !== -1);
+}
 
+/**
+ * Isole les messages postés APRÈS le dernier message du Product Expert.
+ *
+ * Trois stratégies, de la plus fiable à la plus dégradée :
+ *  1. par nom d'affichage du PE — le seul repère stable d'une session à l'autre ;
+ *  2. par recouvrement de mots avec sa réponse, si elle est encore en mémoire ;
+ *  3. dernier message du fil, en signalant l'incertitude.
+ *
+ * @param {Array<{author: string, text: string}>} messages Le fil structuré
+ * @param {string} nomPe Nom d'affichage du Product Expert sur le forum
+ * @param {string} reponsePe Sa réponse publiée, si elle est connue
+ * @returns {{messages: Array, methode: string, fiable: boolean}}
+ */
+function isolerRelanceStructuree(messages, nomPe, reponsePe) {
+  if (!messages || !messages.length) {
+    return { messages: [], methode: 'aucun message', fiable: false };
+  }
+
+  // 1. Repérage par nom d'affichage
+  if (nomPe) {
     for (let i = messages.length - 1; i >= 0; i--) {
-      const courant = normaliser(messages[i]);
-      if (!motsRef.length) break;
-
-      const communs = motsRef.filter((m) => courant.indexOf(m) !== -1).length;
-      if (communs / motsRef.length >= 0.5) {
-        indexPe = i;
-        break;
+      if (memeAuteur(messages[i].author, nomPe)) {
+        return { messages: messages.slice(i + 1), methode: 'nom du Product Expert', fiable: true };
       }
     }
   }
 
-  // Réponse du PE introuvable : on retient le dernier message du fil, qui est la relance
-  const posterieurs = indexPe === -1
-    ? messages.slice(-1)
-    : messages.slice(indexPe + 1);
+  // 2. Repérage par recouvrement avec la réponse publiée
+  const normaliser = (t) => String(t || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const reference = normaliser(reponsePe);
 
-  return posterieurs.join('\n\n').trim();
+  if (reference) {
+    const motsRef = reference.split(' ').filter((m) => m.length > 4);
+    if (motsRef.length) {
+      for (let i = messages.length - 1; i >= 0; i--) {
+        const courant = normaliser(messages[i].text);
+        const communs = motsRef.filter((m) => courant.indexOf(m) !== -1).length;
+        if (communs / motsRef.length >= 0.5) {
+          return { messages: messages.slice(i + 1), methode: 'contenu de votre réponse', fiable: true };
+        }
+      }
+    }
+  }
+
+  // 3. Repli : le dernier message, sans certitude sur son auteur
+  return { messages: messages.slice(-1), methode: 'dernier message du fil', fiable: false };
+}
+
+/**
+ * Met en forme les messages de relance en indiquant qui parle.
+ *
+ * L'attribution est indispensable : un fil peut contenir la réponse d'un autre Product
+ * Expert en plus de celle du demandeur, et les deux n'appellent pas le même traitement.
+ *
+ * @param {Array<{author: string, text: string}>} messages
+ * @param {string} demandeur Nom de l'auteur de la question d'origine
+ * @returns {string}
+ */
+function formaterRelance(messages, demandeur) {
+  return messages.map((m) => {
+    const auteur = m.author || 'Intervenant inconnu';
+    const role = (demandeur && memeAuteur(auteur, demandeur))
+      ? ' (auteur de la question)'
+      : (m.author ? ' (autre intervenant)' : '');
+    return auteur + role + ' :\n' + m.text;
+  }).join('\n\n---\n\n');
 }
 
 /**
@@ -558,24 +644,45 @@ function afficherBoutonRelance() {
   btn.title = "Générer une réponse au dernier message, sans répéter ce qui a déjà été dit";
 
   btn.addEventListener('click', async () => {
-    const config = await getStorage(['webappUrl', 'sharedSecret']);
+    const config = await getStorage(['webappUrl', 'sharedSecret', 'peDisplayName']);
     if (!config.webappUrl || !config.sharedSecret) {
       alert("Configurez d'abord l'URL de la WebApp et le secret partagé dans les options de l'extension.");
       return;
     }
 
-    const messages = extraireMessagesDuFil();
+    const messages = extraireFilStructure();
     if (messages.length < 2) {
       alert("Ce fil ne contient pas encore de message postérieur à votre réponse.");
       return;
     }
 
-    // Le texte de sa propre réponse sert de repère pour isoler ce qui a suivi
-    const relance = isolerRelance(messages, contenuEditeurMemorise || dernierTexteCapture);
-    if (!relance) {
+    if (!config.peDisplayName) {
+      alert("Votre nom d'affichage sur le forum n'est pas renseigné.\n\nSans lui, votre propre message ne peut pas être identifié de façon fiable dans le fil. Ajoutez-le dans les options de l'extension (par exemple « Fabrice_Fx »).");
+    }
+
+    const isolation = isolerRelanceStructuree(
+      messages,
+      config.peDisplayName,
+      contenuEditeurMemorise || dernierTexteCapture
+    );
+
+    if (!isolation.messages.length) {
       alert("Aucun message postérieur à votre réponse n'a été trouvé dans ce fil.");
       return;
     }
+
+    if (!isolation.fiable) {
+      const suite = confirm(
+        "⚠️ Votre message n'a pas pu être localisé dans le fil.\n\n" +
+        "Seul le dernier message a été retenu comme relance : s'il provient d'un autre Product Expert, " +
+        "la réponse générée portera à côté.\n\n" +
+        "Continuer quand même ?"
+      );
+      if (!suite) return;
+    }
+
+    const relance = formaterRelance(isolation.messages, config.askerName || '');
+    console.log("💬 Relance isolée par « " + isolation.methode + " » — " + isolation.messages.length + " message(s).");
 
     btn.disabled = true;
     btn.innerHTML = '⏳ Analyse de la relance...';

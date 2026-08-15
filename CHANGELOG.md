@@ -2,6 +2,21 @@
 
 Toutes les modifications notables apportées à ce projet sont documentées dans ce fichier.
 
+## [1.10.1] - 2026-08-15
+
+### 🔍 Extraction du Fil : Attribution des Auteurs
+
+> **Un fil réel contient la question, votre réponse, parfois celle d'un autre bénévole, puis la relance du demandeur.**
+> La première version de l'extraction ne récupérait que du texte, sans auteur : impossible de distinguer une relance à traiter du message d'un collègue. Elle repérait par ailleurs votre message via une variable en mémoire du script, vide dès lors que le fil est rouvert plus tard — c'est-à-dire dans le cas normal d'une relance.
+
+- **Attribution par message (`auteurDuBloc`, `extraireFilStructure`)** : Chaque message est extrait avec son auteur. La remontée dans les ancêtres s'arrête dès qu'un conteneur englobe plusieurs noms d'utilisateur, sans quoi tous les messages hériteraient du nom du premier intervenant.
+- **Nom d'affichage du Product Expert** : Nouveau champ dans les options de l'extension. C'est le seul repère stable d'une session à l'autre pour localiser vos propres messages. La comparaison tolère la casse, les accents, les espaces et les séparateurs.
+- **Trois stratégies d'isolement (`isolerRelanceStructuree`)** : par nom d'affichage, à défaut par recouvrement avec la réponse encore en mémoire, à défaut le dernier message du fil — ce dernier cas étant explicitement signalé comme non fiable, avec demande de confirmation avant de poursuivre.
+- **Rôles transmis au modèle (`formaterRelance`)** : Chaque message porte la mention « (auteur de la question) » ou « (autre intervenant) ».
+- **Consigne dédiée aux autres bénévoles** : Ne pas répéter ce qu'un collègue a déjà dit, ne pas le contredire frontalement, corriger un point factuel sans le mettre en cause. Si seul un autre intervenant s'est exprimé et que le demandeur n'a rien ajouté, le signaler plutôt que de produire un message pour meubler.
+- **Plusieurs réponses du Product Expert dans un fil** : Seule la plus récente sert de point de référence.
+- **Couverture de test (`tests/11-extraction-fil.test.js`)** : 24 cas sur un fil réaliste à quatre intervenants.
+
 ## [1.10.0] - 2026-08-15
 
 ### 💬 Traitement des Relances
