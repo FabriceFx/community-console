@@ -30,6 +30,35 @@
   transform: translateY(0);
 }
 
+#pe-capture-btn {
+  position: fixed;
+  top: 152px;
+  right: 24px;
+  z-index: 999999;
+  background-color: #ffffff;
+  color: #1a73e8;
+  border: 1px solid #dadce0;
+  border-radius: 24px;
+  padding: 10px 20px;
+  font-family: 'Google Sans', Roboto, Arial, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(60,64,67,0.2);
+  transition: all 0.2s ease;
+}
+
+#pe-capture-btn:hover {
+  background-color: #f8f9fa;
+  box-shadow: 0 4px 12px rgba(60,64,67,0.3);
+}
+
+#pe-capture-btn:disabled {
+  color: #80868b;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 #pe-tracker-btn:disabled {
   background-color: #80868b;
   box-shadow: none;

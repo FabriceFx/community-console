@@ -125,6 +125,17 @@
     </div>
   </div>
 
+  <div class="form-group">
+    <label for="sharedSecret">Secret partagé</label>
+    <div class="input-wrapper">
+      <input type="password" id="sharedSecret" placeholder="Obligatoire">
+      <button type="button" class="toggle-visibility" id="toggleSecretBtn" title="Afficher/Masquer">👁️</button>
+    </div>
+    <div class="hint">
+      Généré dans Google Sheets via <b>🛠️ Suivi PE &gt; Ouvrir le panneau de contrôle</b>. Sans lui, le backend refuse la requête.
+    </div>
+  </div>
+
   <button class="save-btn" id="saveBtn">Sauvegarder la configuration</button>
   <div id="status"></div>
 

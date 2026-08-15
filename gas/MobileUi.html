@@ -243,6 +243,16 @@
         <input type="text" id="authorName" placeholder="Extrait automatiquement si vide..." autocomplete="off" spellcheck="false">
       </div>
 
+      <div class="form-group">
+        <label for="questionContent">Corps de la question / Détails <span style="font-weight:normal; text-transform:none; opacity:0.75;">(Optionnel)</span></label>
+        <textarea id="questionContent" rows="3" placeholder="Collez ici le texte complet si la question est longue ou complexe..." autocomplete="off" spellcheck="false" style="width: 100%; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; color: var(--text); font-size: 14px; font-family: inherit; outline: none; resize: vertical; line-height: 1.4;"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="sharedSecret">Secret partagé</label>
+        <input type="password" id="sharedSecret" placeholder="Mémorisé sur cet appareil" autocomplete="off" spellcheck="false">
+      </div>
+
       <button id="submitBtn" class="btn" onclick="submitThread()">
         <span class="spinner" id="spinner"></span>
         <span id="btnText">🚀 Analyser & Suivre</span>
@@ -253,7 +263,9 @@
     <div id="resultCard" class="card result-card">
       <div class="badge" id="productBadge">Gmail</div>
       <h2 id="resultTitle" style="font-size:16px; font-weight:600; margin-bottom:12px;">-</h2>
-      
+
+      <div id="reviewWarning" style="display:none; background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.4); color:#fca5a5; border-radius:12px; padding:12px 14px; font-size:13px; line-height:1.5; margin-bottom:14px;"></div>
+
       <label>Réponse IA Générée par Gemini</label>
       <div class="summary-box" id="summaryText">...</div>
 
@@ -274,16 +286,42 @@
 
   <script>
     let currentSummary = "";
+    var SECRET_KEY = 'PE_TRACKER_SHARED_SECRET';
+
+    // Le secret est mémorisé sur l'appareil pour ne pas avoir à le ressaisir à chaque thread
+    (function restoreSecret() {
+      try {
+        var stored = localStorage.getItem(SECRET_KEY);
+        if (stored) document.getElementById('sharedSecret').value = stored;
+      } catch (e) {
+        // Stockage local indisponible (navigation privée) : saisie manuelle à chaque fois
+      }
+    })();
 
     function submitThread() {
       const urlInput = document.getElementById('threadUrl');
       const url = urlInput.value.trim();
       const authorInput = document.getElementById('authorName');
       const authorName = authorInput ? authorInput.value.trim() : "";
+      const contentInput = document.getElementById('questionContent');
+      const questionContent = contentInput ? contentInput.value.trim() : "";
+      const secretInput = document.getElementById('sharedSecret');
+      const sharedSecret = secretInput ? secretInput.value.trim() : "";
 
       if (!url) {
         alert("Veuillez coller l'URL du thread Google.");
         return;
+      }
+
+      if (!sharedSecret) {
+        alert("Secret partagé manquant.\n\nGénérez-le dans Google Sheets via « 🛠️ Suivi PE > Ouvrir le panneau de contrôle ».");
+        return;
+      }
+
+      try {
+        localStorage.setItem(SECRET_KEY, sharedSecret);
+      } catch (e) {
+        // Sans stockage local, le secret devra être ressaisi
       }
 
       const submitBtn = document.getElementById('submitBtn');
@@ -307,6 +345,7 @@
             document.getElementById('resultTitle').innerText = (response.author ? response.author + " • " : "") + (response.title || 'Thread enregistré');
             currentSummary = response.summary || '';
             document.getElementById('summaryText').innerText = currentSummary || 'Thread sauvegardé dans Google Sheets.';
+            showReviewWarning(response);
             resultCard.style.display = 'block';
             resultCard.scrollIntoView({ behavior: 'smooth' });
           } else {
@@ -319,7 +358,32 @@
           btnText.innerText = '🚀 Analyser & Suivre';
           alert("Erreur d'analyse : " + error.message);
         })
-        .processMobileThreadUrl(url, authorName);
+        .processMobileThreadUrl(url, authorName, questionContent, sharedSecret);
+    }
+
+    /**
+     * Affiche un avertissement lorsque la proposition ne doit pas être publiée telle quelle.
+     * Une procédure générique posée sur une question incomplète est immédiatement repérée
+     * comme du remplissage automatique : il vaut mieux demander les éléments manquants.
+     */
+    function showReviewWarning(response) {
+      const box = document.getElementById('reviewWarning');
+      const messages = [];
+
+      if (response.replyStatus === 'CLARIFICATION') {
+        messages.push("⚠️ Informations insuffisantes : Gemini a rédigé une demande de précisions plutôt qu'une procédure. Ne remplacez pas ce texte par une réponse générique.");
+      } else if (response.replyStatus === 'HORS_SUJET') {
+        messages.push("⚠️ Demande hors sujet : relisez entièrement avant publication.");
+      } else if (response.confidence === 'FAIBLE') {
+        messages.push("⚠️ Confiance faible : vérifiez chaque affirmation avant de publier.");
+      }
+
+      if (response.contentIsThin) {
+        messages.push("ℹ️ Seul le titre du thread a pu être lu. Collez le corps de la question pour une réponse pertinente.");
+      }
+
+      box.innerText = messages.join('\n\n');
+      box.style.display = messages.length ? 'block' : 'none';
     }
 
     function copyAnswer() {
@@ -333,6 +397,8 @@
 
     function resetForm() {
       document.getElementById('threadUrl').value = '';
+      if (document.getElementById('authorName')) document.getElementById('authorName').value = '';
+      if (document.getElementById('questionContent')) document.getElementById('questionContent').value = '';
       document.getElementById('resultCard').style.display = 'none';
       document.getElementById('threadUrl').focus();
     }

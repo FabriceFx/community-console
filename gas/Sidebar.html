@@ -145,8 +145,8 @@
       <input type="password" id="apiKey" placeholder="AIzaSy...">
       
       <label for="modelName" style="margin-top:8px;">Modèle à utiliser</label>
-      <input type="text" id="modelName" placeholder="ex: gemini-2.5-flash, gemini-3.7-flash...">
-      
+      <input type="text" id="modelName" placeholder="ex: gemini-3.7-flash">
+
       <button id="saveBtn" onclick="saveSettings()" style="margin-top:8px;">
         <span id="btnText">Sauvegarder</span>
         <span class="loader" id="loader"></span>
@@ -154,7 +154,22 @@
       <div id="status" class="status"></div>
     </div>
   </div>
-  
+
+  <div class="card">
+    <h2>Secret partagé (obligatoire)</h2>
+    <p>La WebApp est publiée en accès « N'importe qui » : ce secret est la seule barrière empêchant un tiers qui connaîtrait votre URL d'écrire dans cette feuille et de consommer votre quota Gemini.</p>
+    <p>Recopiez-le ensuite dans l'extension Chrome et sur la WebApp mobile.</p>
+
+    <div class="input-group">
+      <label for="sharedSecret">Secret</label>
+      <input type="text" id="sharedSecret" placeholder="Cliquez sur Générer">
+      <button id="genBtn" onclick="generateSecret()" style="margin-top:8px; background:#5f6368;">
+        <span>🎲 Générer un nouveau secret</span>
+      </button>
+      <div id="secretStatus" class="status"></div>
+    </div>
+  </div>
+
   <div class="card">
     <h2>Liaison avec l'Extension</h2>
     <p>Pour faire le lien avec l'extension Chrome, vous devez publier ce projet comme une <b>Application Web (WebApp)</b>.</p>
@@ -167,13 +182,41 @@
       if (settings) {
         if (settings.apiKey) document.getElementById('apiKey').value = settings.apiKey;
         if (settings.modelName) document.getElementById('modelName').value = settings.modelName;
+        if (settings.sharedSecret) document.getElementById('sharedSecret').value = settings.sharedSecret;
+        if (!settings.sharedSecret) {
+          const s = document.getElementById('secretStatus');
+          s.textContent = '⚠️ Aucun secret : la WebApp refuse toute requête.';
+          s.className = 'status error';
+        }
       }
     }).getSettings();
-    
+
+    function generateSecret() {
+      const btn = document.getElementById('genBtn');
+      const status = document.getElementById('secretStatus');
+      btn.disabled = true;
+      status.textContent = '';
+
+      google.script.run
+        .withSuccessHandler(function(secret) {
+          btn.disabled = false;
+          document.getElementById('sharedSecret').value = secret;
+          status.textContent = '✅ Secret généré. Recopiez-le dans l\'extension et sur le mobile.';
+          status.className = 'status success';
+        })
+        .withFailureHandler(function(error) {
+          btn.disabled = false;
+          status.textContent = '❌ Erreur : ' + error.message;
+          status.className = 'status error';
+        })
+        .generateSharedSecret();
+    }
+
     function saveSettings() {
       const settings = {
         apiKey: document.getElementById('apiKey').value,
-        modelName: document.getElementById('modelName').value || 'gemini-pro'
+        modelName: document.getElementById('modelName').value || 'gemini-3.7-flash',
+        sharedSecret: document.getElementById('sharedSecret').value
       };
       const btn = document.getElementById('saveBtn');
       const loader = document.getElementById('loader');

@@ -1,14 +1,27 @@
 console.log("Community Console PE Tracker activé.");
 
+// Longueur de question transmise à Gemini lorsque le sélecteur précis a fonctionné
+const MAX_CONTENT = 10000;
+// Plafond bien plus bas pour le repli générique sur les <p> de la page, très bruité
+const MAX_FALLBACK_CONTENT = 2000;
+
 /**
- * Enveloppe chrome.storage.sync.get dans une Promise.
+ * Enveloppe chrome.storage.local.get dans une Promise, avec repli sur l'ancien
+ * stockage synchronisé pour les configurations antérieures à la v1.6.0.
  * @param {Array<string>} keys
  * @returns {Promise<Object>}
  */
 function getStorage(keys) {
   return new Promise((resolve) => {
     try {
-      chrome.storage.sync.get(keys, (result) => resolve(result || {}));
+      chrome.storage.local.get(keys, (result) => {
+        const local = result || {};
+        if (Object.keys(local).some((k) => local[k])) {
+          resolve(local);
+          return;
+        }
+        chrome.storage.sync.get(keys, (legacy) => resolve(legacy || {}));
+      });
     } catch (e) {
       resolve({});
     }
@@ -48,6 +61,178 @@ function estVisible(el) {
   const style = window.getComputedStyle(el);
   return style.visibility !== 'hidden' && style.display !== 'none';
 }
+
+// Libellés du bouton qui publie effectivement le message.
+// « Répondre » / « Reply » en sont volontairement absents : dans la Community Console,
+// ce bouton OUVRE l'éditeur, il ne publie pas — c'est même celui que injecterReponse()
+// clique par programme. L'y inclure enregistrerait comme publiés des textes qui ne le sont pas.
+const LIBELLES_PUBLICATION = [
+  'publier',
+  'envoyer',
+  'poster',
+  'publish',
+  'post',
+  'send',
+  'submit'
+];
+
+// Libellés à écarter même s'ils contiennent un mot de publication
+const LIBELLES_EXCLUS = /annul|cancel|brouillon|draft|supprim|delete|aperçu|preview|modifier|edit\b/;
+
+/**
+ * Détermine si un élément cliqué correspond au bouton de publication du forum.
+ *
+ * On exige que le libellé COMMENCE par un verbe de publication, plutôt que de le
+ * contenir : « Publier » et « Publier la réponse » sont acceptés, « Répondre à ce
+ * message » ou « Signaler ce post » ne le sont pas.
+ *
+ * @param {HTMLElement} el L'élément cliqué
+ * @returns {boolean}
+ */
+function estBoutonPublier(el) {
+  const texte = (el.innerText || el.textContent || '').trim().toLowerCase();
+  const aria = (el.getAttribute('aria-label') || '').trim().toLowerCase();
+
+  return [texte, aria].some((label) => {
+    if (!label || label.length > 40) return false;
+    if (LIBELLES_EXCLUS.test(label)) return false;
+
+    return LIBELLES_PUBLICATION.some((verbe) =>
+      label === verbe || label.startsWith(verbe + ' ')
+    );
+  });
+}
+
+/**
+ * Enregistre dans Google Sheets le texte réellement publié sur le forum.
+ *
+ * C'est la boucle de retour : l'écart entre la proposition de Gemini et le message
+ * finalement publié est ce qui décrit le mieux le style du Product Expert. Ces réponses
+ * sont ensuite réinjectées dans le prompt comme exemples, et l'outil s'aligne peu à peu.
+ *
+ * Une réponse publiée sans retouche n'est pas conservée : elle n'apprendrait au modèle
+ * que sa propre production, dont les tics se renforceraient à chaque génération. Le
+ * backend compare le texte publié à la proposition et ne garde que ce qui a été réécrit.
+ *
+ * @param {string} text Le texte final présent dans l'éditeur au moment de la publication
+ * @returns {Promise<{ok: boolean, modified: boolean, editRatio: number}>}
+ */
+async function enregistrerReponsePubliee(text) {
+  const echec = { ok: false, modified: false, editRatio: 0 };
+
+  const propre = (text || '').trim();
+  if (propre.length < 40) return echec;
+
+  try {
+    const config = await getStorage(['webappUrl', 'sharedSecret']);
+    if (!config.webappUrl || !config.sharedSecret) return echec;
+
+    const response = await sendMessage({
+      action: 'sendToWebapp',
+      webappUrl: config.webappUrl,
+      payload: {
+        action: 'recordPublished',
+        url: window.location.href,
+        publishedText: propre,
+        secret: config.sharedSecret
+      }
+    });
+
+    const data = (response && response.success) ? response.data : null;
+    const ok = !!(data && data.status === 'success');
+
+    if (ok) {
+      // `modified: false` = proposition reprise telle quelle : rien n'est stocké, et
+      // rien n'alimente le style — une réponse non retouchée n'apprend rien au modèle.
+      console.log(data.modified
+        ? `📝 Réponse retouchée enregistrée (${data.editRatio} % réécrit) : elle servira d'exemple de style.`
+        : '📝 Proposition publiée telle quelle : rien à apprendre, rien de stocké.');
+    } else {
+      console.log('📝 Enregistrement non abouti :', response);
+    }
+
+    return { ok: ok, modified: !!(data && data.modified), editRatio: data ? data.editRatio : 0 };
+  } catch (e) {
+    console.warn("Enregistrement de la réponse publiée impossible :", e);
+    return { ok: false, modified: false, editRatio: 0 };
+  }
+}
+
+// Surveillance de la publication.
+// Écoute en phase de capture : le contenu de l'éditeur doit être lu AVANT que le forum
+// ne vide le champ. Rien n'est publié par l'extension, on ne fait qu'observer.
+let dernierTexteCapture = '';
+
+// Dernier contenu connu de l'éditeur.
+// Indispensable : une fois le message publié, le forum retire l'éditeur du DOM. Sans cette
+// mémoire, toute capture postérieure à la publication est impossible — c'est précisément
+// le moment où l'on pense à cliquer sur « Enregistrer ma version ».
+let contenuEditeurMemorise = '';
+let captureDejaReussie = false;
+
+/**
+ * Lit le texte d'un élément d'édition, qu'il s'agisse d'un champ de formulaire
+ * ou d'une zone `contenteditable`.
+ * @param {HTMLElement} el
+ * @returns {string}
+ */
+function lireTexteEditeur(el) {
+  if (!el) return '';
+  return String(el.value !== undefined ? el.value : (el.innerText || '')).trim();
+}
+
+/**
+ * Choisit le meilleur texte disponible entre l'éditeur encore présent à l'écran
+ * et le dernier contenu mémorisé.
+ *
+ * @param {string} texteLive Texte lu dans l'éditeur au moment du clic ('' s'il a disparu)
+ * @param {string} texteMemorise Dernier contenu connu de l'éditeur
+ * @returns {string} Le texte à enregistrer, ou '' si aucun n'est exploitable
+ */
+function choisirTexteACapturer(texteLive, texteMemorise) {
+  const live = String(texteLive || '').trim();
+  const memo = String(texteMemorise || '').trim();
+
+  // L'éditeur vidé après publication ne doit pas écraser ce que l'on avait mémorisé
+  if (live.length >= 40) return live;
+  if (memo.length >= 40) return memo;
+  return '';
+}
+
+/**
+ * Mémorise en continu le contenu de la zone de réponse pendant la saisie.
+ * C'est ce qui permet d'enregistrer la version finale même après sa publication.
+ */
+document.addEventListener('input', (event) => {
+  const el = event.target;
+  if (!el || el.id === 'pe-tracker-btn' || el.id === 'pe-capture-btn') return;
+
+  const estZoneEdition =
+    el.tagName === 'TEXTAREA' ||
+    el.isContentEditable ||
+    (el.getAttribute && el.getAttribute('role') === 'textbox');
+
+  if (!estZoneEdition) return;
+
+  const texte = lireTexteEditeur(el);
+  if (texte.length >= 40) {
+    contenuEditeurMemorise = texte;
+  }
+}, true);
+
+document.addEventListener('click', (event) => {
+  const cible = event.target.closest ? event.target.closest('button, [role="button"], a, input[type="submit"]') : null;
+  if (!cible || cible.id === 'pe-tracker-btn' || cible.id === 'pe-capture-btn') return;
+  if (!estBoutonPublier(cible)) return;
+
+  const texte = choisirTexteACapturer(lireTexteEditeur(trouverEditeurReponse()), contenuEditeurMemorise);
+  if (!texte || texte === dernierTexteCapture) return;
+
+  dernierTexteCapture = texte;
+  enregistrerReponsePubliee(texte).then((res) => {
+    if (res.ok) captureDejaReussie = true;
+  });
+}, true);
 
 /**
  * Recherche le bouton "Répondre" / "Reply" dans le DOM de la Community Console.
@@ -231,6 +416,69 @@ async function injecterReponse(text) {
 }
 
 /**
+ * Affiche le bouton de capture manuelle de la réponse publiée.
+ * Complément à la détection automatique du clic sur « Publier », qui peut échouer
+ * si le forum change ses libellés ou si l'envoi se fait au clavier.
+ */
+function afficherBoutonCapture() {
+  if (document.getElementById('pe-capture-btn')) return;
+
+  const btn = document.createElement('button');
+  btn.id = 'pe-capture-btn';
+  btn.innerHTML = '📝 Enregistrer ma version';
+  btn.title = "Enregistrer le texte actuellement dans l'éditeur comme réponse publiée (alimente le style de l'outil)";
+
+  btn.addEventListener('click', async () => {
+    // L'éditeur peut avoir disparu (message déjà publié) : on retombe alors
+    // sur le dernier contenu mémorisé pendant la saisie.
+    const texte = choisirTexteACapturer(lireTexteEditeur(trouverEditeurReponse()), contenuEditeurMemorise);
+
+    if (!texte) {
+      if (captureDejaReussie) {
+        alert("✅ Votre réponse a déjà été enregistrée pour ce thread.\n\nElle figure dans la colonne « Réponse publiée » de votre feuille de suivi.");
+      } else {
+        alert(
+          "Aucun texte à enregistrer.\n\n" +
+          "L'éditeur est vide ou a déjà été fermé par le forum, et rien n'a été mémorisé pendant la saisie.\n\n" +
+          "Si vous avez déjà publié : copiez votre message depuis le fil, collez-le dans la colonne " +
+          "« Réponse publiée » de la feuille de suivi. Il alimentera le style au même titre."
+        );
+      }
+      return;
+    }
+
+    if (texte === dernierTexteCapture && captureDejaReussie) {
+      alert("✅ Cette version a déjà été enregistrée.");
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Enregistrement...';
+
+    dernierTexteCapture = texte;
+    const res = await enregistrerReponsePubliee(texte);
+    if (res.ok) captureDejaReussie = true;
+
+    if (!res.ok) {
+      btn.innerHTML = '❌ Échec de l\'enregistrement';
+      alert("L'enregistrement a échoué.\n\nVérifiez l'URL de la WebApp et le secret partagé dans les options de l'extension, puis réessayez.");
+    } else if (res.modified) {
+      btn.innerHTML = `✅ Retouche enregistrée (${res.editRatio} %)`;
+    } else {
+      // Rien n'est stocké : une proposition publiée telle quelle n'apprend rien au modèle
+      btn.innerHTML = 'ℹ️ Proposition non modifiée';
+    }
+
+    setTimeout(() => {
+      btn.innerHTML = '📝 Enregistrer ma version';
+      btn.disabled = false;
+    }, 3000);
+  });
+
+  document.body.appendChild(btn);
+}
+
+/**
  * Fonction principale : extraire les données et injecter le bouton
  */
 function initTracker() {
@@ -252,12 +500,20 @@ function initTracker() {
     btn.innerHTML = '⏳ Analyse Gemini & Envoi...';
     
     try {
-      const storageData = await getStorage(['webappUrl', 'geminiApiKey']);
+      const storageData = await getStorage(['webappUrl', 'geminiApiKey', 'sharedSecret']);
       const webappUrl = storageData.webappUrl;
       const geminiApiKey = storageData.geminiApiKey || "";
+      const sharedSecret = storageData.sharedSecret || "";
 
       if (!webappUrl) {
         alert("Veuillez d'abord configurer l'URL de la WebApp Google Apps Script dans les options de l'extension (clic sur l'icône de l'extension dans Chrome).");
+        btn.disabled = false;
+        btn.innerHTML = '📌 Suivre dans Sheets';
+        return;
+      }
+
+      if (!sharedSecret) {
+        alert("Secret partagé manquant.\n\nGénérez-le dans Google Sheets via « 🛠️ Suivi PE > Ouvrir le panneau de contrôle », puis recopiez-le dans les options de l'extension.");
         btn.disabled = false;
         btn.innerHTML = '📌 Suivre dans Sheets';
         return;
@@ -288,12 +544,18 @@ function initTracker() {
         if (contentEl) {
           content = contentEl.innerText.trim();
         } else {
+          // Repli très imprécis : il ramasse aussi la navigation, le pied de page et les
+          // autres réponses du fil. On le plafonne bas pour ne pas noyer la vraie question.
           const contentEls = document.querySelectorAll('p');
           if (contentEls && contentEls.length > 0) {
-            content = Array.from(contentEls).map(el => el.innerText.trim()).filter(t => t).join('\n\n');
+            content = Array.from(contentEls)
+              .map(el => el.innerText.trim())
+              .filter(t => t)
+              .join('\n\n')
+              .substring(0, MAX_FALLBACK_CONTENT);
           }
         }
-        
+
         const detailsEl = document.querySelector('.scTailwindThreadQuestionQuestiondetailsdetails');
         if (detailsEl) {
           content += "\n\nDétails techniques : " + detailsEl.innerText.trim();
@@ -306,18 +568,19 @@ function initTracker() {
         console.error("Erreur lors de l'extraction des données DOM :", e);
       }
       
-      content = content.substring(0, 1500);
-      
+      content = content.substring(0, MAX_CONTENT);
+
       const payload = {
         title: title,
         url: window.location.href,
         author: author,
         product: product,
         content: content,
-        apiKey: geminiApiKey
+        apiKey: geminiApiKey,
+        secret: sharedSecret
       };
 
-      console.log("📡 Transmission au Service Worker :", payload);
+      console.log("📡 Transmission au Service Worker (" + content.length + " caractères de contenu)");
 
       let response;
       try {
@@ -340,17 +603,40 @@ function initTracker() {
 
       console.log("Réponse reçue :", response);
 
-      let summaryText = "";
-      if (response && response.success && response.data) {
-        summaryText = response.data.summary || "";
+      const data = (response && response.success && response.data) ? response.data : null;
+
+      if (data && data.status === 'error') {
+        alert("Le backend a refusé la demande :\n\n" + (data.message || 'Erreur inconnue'));
+        btn.innerHTML = '❌ Refusé';
+        btn.style.backgroundColor = '#d93025';
+        return;
+      }
+
+      const summaryText = data ? (data.summary || "") : "";
+
+      // Avertir AVANT relecture quand la proposition ne doit pas être publiée telle quelle.
+      // C'est ce garde-fou qui évite de poster une procédure générique sur une question
+      // à laquelle il manque un élément (source de données, message d'erreur, version...).
+      if (data && data.replyStatus === 'CLARIFICATION') {
+        alert("⚠️ Informations insuffisantes\n\nCe thread ne contient pas les éléments nécessaires pour une réponse fiable.\n\nGemini a rédigé une demande de précisions plutôt qu'une procédure : une procédure générique serait plausible mais inapplicable.");
+      } else if (data && data.replyStatus === 'HORS_SUJET') {
+        alert("⚠️ Demande hors sujet\n\nRelisez entièrement la proposition avant toute publication.");
+      } else if (data && data.confidence === 'FAIBLE') {
+        alert("⚠️ Confiance faible\n\nGemini signale qu'il extrapole sur cette réponse. Vérifiez chaque affirmation avant de publier.");
       }
 
       if (summaryText) {
         const reponsePlacee = await injecterReponse(summaryText);
-        
+
         if (reponsePlacee) {
           btn.innerHTML = '✅ Envoyé & Réponse placée !';
           btn.style.backgroundColor = '#0f9d58';
+          // Amorcer la mémoire avec le texte injecté : si le PE publie sans rien modifier,
+          // aucun événement `input` ne se déclenche et il n'y aurait rien à enregistrer.
+          contenuEditeurMemorise = summaryText.trim();
+          // Filet de sécurité : si la détection automatique du clic sur « Publier »
+          // échoue (libellé inattendu, envoi au clavier), la capture reste possible à la main.
+          afficherBoutonCapture();
         } else {
           try {
             await navigator.clipboard.writeText(summaryText);
@@ -383,12 +669,19 @@ function initTracker() {
   document.body.appendChild(btn);
 }
 
-// Observation DOM pour la gestion SPA
-const observer = new MutationObserver((mutations) => {
+// Observation DOM pour la gestion SPA.
+// Throttle et non debounce : sur une page qui mute en continu (horodatages relatifs,
+// indicateurs de présence), un debounce se réarme indéfiniment et le bouton n'apparaît jamais.
+let throttleTimer = null;
+const observer = new MutationObserver(() => {
+  if (throttleTimer) return;
   initTracker();
+  throttleTimer = setTimeout(() => {
+    throttleTimer = null;
+  }, 300);
 });
 
 observer.observe(document.body, { childList: true, subtree: true });
 
 // Lancement initial
-setTimeout(initTracker, 2000);
+setTimeout(initTracker, 1500);

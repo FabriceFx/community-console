@@ -46,6 +46,9 @@ function saveSettings(settings) {
   if (settings.modelName) {
     setGeminiModelName(settings.modelName);
   }
+  if (settings.sharedSecret !== undefined) {
+    setSharedSecret(settings.sharedSecret);
+  }
   return true;
 }
 
@@ -55,6 +58,17 @@ function saveSettings(settings) {
 function getSettings() {
   return {
     apiKey: getGeminiApiKey(),
-    modelName: getGeminiModelName()
+    modelName: getGeminiModelName(),
+    sharedSecret: getSharedSecret()
   };
+}
+
+/**
+ * Génère un secret partagé aléatoire à recopier dans l'extension et sur le mobile.
+ * @returns {string} Le secret généré et déjà enregistré côté serveur
+ */
+function generateSharedSecret() {
+  const secret = Utilities.getUuid().replace(/-/g, '');
+  setSharedSecret(secret);
+  return secret;
 }

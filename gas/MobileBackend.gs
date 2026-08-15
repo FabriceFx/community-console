@@ -3,14 +3,19 @@
  */
 
 /**
- * Reçoit l'URL d'un thread soumise depuis l'interface mobile, extrait les informations côté serveur via UrlFetchApp,
- * génère la réponse Gemini, enregistre la ligne dans Google Sheets et retourne le résumé formaté au mobile.
- * 
+ * Reçoit l'URL d'un thread soumise depuis l'interface mobile, extrait les informations côté serveur
+ * via UrlFetchApp, génère la proposition de réponse Gemini, enregistre la ligne dans Google Sheets
+ * et retourne le message formaté au mobile.
+ *
  * @param {string} threadUrl L'URL complète du thread Google Community Console
- * @returns {Object} Objet contenant le statut, le titre, le produit et la réponse Gemini
+ * @param {string} [providedAuthor] Prénom ou nom de l'auteur fourni manuellement
+ * @param {string} [providedContent] Texte intégral de la question collé manuellement si disponible
+ * @param {string} [providedSecret] Secret partagé protégeant la WebApp publique
+ * @returns {Object} Statut, titre, produit, niveau de fiabilité et proposition de réponse
  */
-function processMobileThreadUrl(threadUrl, providedAuthor) {
-  console.log("processMobileThreadUrl appelé avec URL :", threadUrl, "Auteur transmis :", providedAuthor);
+function processMobileThreadUrl(threadUrl, providedAuthor, providedContent, providedSecret) {
+  // 1. Autorisation — la WebApp est accessible à quiconque connaît son URL
+  assertAuthorized_(providedSecret);
 
   if (!threadUrl || typeof threadUrl !== 'string') {
     throw new Error("L'URL du thread fournie est invalide.");
@@ -20,6 +25,12 @@ function processMobileThreadUrl(threadUrl, providedAuthor) {
   if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
     cleanUrl = 'https://' + cleanUrl;
   }
+
+  // 2. Restreindre les domaines récupérables : sans ce contrôle, la WebApp serait un
+  //    proxy HTTP ouvert agissant au nom du compte Google propriétaire du script.
+  assertAllowedHost_(cleanUrl);
+
+  console.log("processMobileThreadUrl :", cleanUrl, "| auteur fourni :", !!providedAuthor, "| contenu fourni :", !!providedContent);
 
   let htmlText = "";
   try {
@@ -35,14 +46,14 @@ function processMobileThreadUrl(threadUrl, providedAuthor) {
     console.warn("Impossible d'extraire le HTML du thread :", err);
   }
 
-  // 1. Extraire le titre du thread
+  // 3. Extraire le titre du thread
   let title = "Thread Community Console";
   const titleMatch = htmlText.match(/<title[^>]*>([^<]+)<\/title>/i) || htmlText.match(/property="og:title"\s+content="([^"]+)"/i);
   if (titleMatch && titleMatch[1]) {
     title = titleMatch[1].replace(/\s*-\s*Communauté Google.*$/i, '').trim();
   }
 
-  // 2. Extraire le nom du produit Google
+  // 4. Extraire le nom du produit Google
   let product = "Google";
   if (cleanUrl.includes('/mail/')) product = "Gmail";
   else if (cleanUrl.includes('/accounts/')) product = "Compte Google";
@@ -52,19 +63,27 @@ function processMobileThreadUrl(threadUrl, providedAuthor) {
   else if (cleanUrl.includes('/chrome/')) product = "Google Chrome";
   else if (cleanUrl.includes('/android/')) product = "Android";
   else if (cleanUrl.includes('/youtube/')) product = "YouTube";
+  else if (cleanUrl.includes('/docs/')) product = "Google Docs";
 
-  // 3. Extraire la description / contenu texte de la question
-  let content = "";
-  const metaDesc = htmlText.match(/name="description"\s+content="([^"]+)"/i) || htmlText.match(/property="og:description"\s+content="([^"]+)"/i);
-  if (metaDesc && metaDesc[1]) {
-    content = metaDesc[1].trim();
+  // 5. Utiliser le contenu collé manuellement, sinon retomber sur les métadonnées de la page.
+  //    La Community Console étant rendue côté client, ces métadonnées sont souvent très pauvres :
+  //    c'est précisément la raison d'être du champ manuel côté interface mobile.
+  let content = String(providedContent || "").trim();
+  let contentIsThin = false;
+
+  if (!content) {
+    const metaDesc = htmlText.match(/name="description"\s+content="([^"]+)"/i) || htmlText.match(/property="og:description"\s+content="([^"]+)"/i);
+    if (metaDesc && metaDesc[1]) {
+      content = metaDesc[1].trim();
+    }
   }
   if (!content || content.length < 15) {
     content = title;
+    contentIsThin = true;
   }
 
-  // 4. Extraire le nom de l'auteur de la question
-  let author = (providedAuthor || "").trim();
+  // 6. Extraire le nom de l'auteur de la question
+  let author = String(providedAuthor || "").trim();
 
   if (!author) {
     // A. Recherche dans le payload de données Google (avatar + nom d'affichage)
@@ -91,7 +110,7 @@ function processMobileThreadUrl(threadUrl, providedAuthor) {
   }
 
   if (!author) {
-    // D. Titre ou meta og:title si contenant "de [Auteur]" ou "par [Auteur]"
+    // D. Titre ou meta og:title s'il contient « de [Auteur] » ou « par [Auteur] »
     const ogTitleMatch = htmlText.match(/property=["']og:title["']\s+content=["']([^"']+)["']/i);
     if (ogTitleMatch && ogTitleMatch[1]) {
       const matchDe = ogTitleMatch[1].match(/(?:par|de|by)\s+([^-–—|]+)/i);
@@ -105,37 +124,42 @@ function processMobileThreadUrl(threadUrl, providedAuthor) {
     author = "Utilisateur inconnu";
   }
 
-  // 5. Générer la réponse via l'IA Gemini
-  const summary = generateSummaryWithGemini(content, author, product);
+  // 7. Générer la proposition de réponse
+  const reply = generateReply(content, author, product);
+  const summary = reply.text || "";
 
-  // 6. Ajouter une nouvelle ligne dans la feuille Google Sheets
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName(CONFIG.SHEET_NAME);
-  if (!sheet) {
-    sheet = ss.insertSheet(CONFIG.SHEET_NAME);
+  // 8. Enregistrer la ligne sous verrou
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) {
+    throw new Error("Le serveur traite déjà une autre demande. Réessayez dans quelques secondes.");
   }
 
   const newId = Utilities.getUuid().substring(0, 8);
-  const date = new Date();
 
-  sheet.appendRow([
-    newId,
-    date,
-    cleanUrl,
-    product,
-    title,
-    content,
-    author,
-    CONFIG.STATUSES[0], // "Nouvelle"
-    "",
-    "",
-    "Ajouté via WebApp Mobile (iPhone)"
-  ]);
+  try {
+    const sheet = getTrackingSheet_();
 
-  const row = sheet.getLastRow();
-  if (summary) {
-    const richText = formatMarkdownToRichText(summary);
-    sheet.getRange(row, 9).setRichTextValue(richText);
+    sheet.appendRow([
+      newId,
+      new Date(),
+      cleanUrl,
+      product,
+      title,
+      content,
+      author,
+      CONFIG.STATUSES[0], // "Nouvelle"
+      "",
+      "",
+      buildNote_("Ajouté via WebApp Mobile (iPhone)", reply),
+      "" // Réponse publiée, non applicable depuis le mobile
+    ]);
+
+    const row = sheet.getLastRow();
+    if (summary) {
+      sheet.getRange(row, CONFIG.COL.SUMMARY).setRichTextValue(formatMarkdownToRichText(summary));
+    }
+  } finally {
+    lock.releaseLock();
   }
 
   return {
@@ -144,6 +168,10 @@ function processMobileThreadUrl(threadUrl, providedAuthor) {
     title: title,
     author: author,
     product: product,
-    summary: summary || ""
+    summary: summary,
+    replyStatus: reply.status,
+    confidence: reply.confidence,
+    // Signale à l'interface que Gemini n'a travaillé que sur le titre du thread
+    contentIsThin: contentIsThin
   };
 }

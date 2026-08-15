@@ -19,11 +19,14 @@ function onOpen() {
 }
 
 /**
- * Initialise la feuille de suivi avec les bonnes colonnes et validations
+ * Initialise la feuille de suivi avec les bonnes colonnes et validations.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} [targetSheet] Feuille optionnelle à initialiser
+ * @param {boolean} [isSilent=false] Si true, ne tente pas d'afficher de boîte de dialogue UI (contexte WebApp/Trigger)
+ * @returns {GoogleAppsScript.Spreadsheet.Sheet} La feuille initialisée
  */
-function setupSheet() {
+function setupSheet(targetSheet, isSilent = false) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName(CONFIG.SHEET_NAME);
+  let sheet = targetSheet || ss.getSheetByName(CONFIG.SHEET_NAME);
   
   if (!sheet) {
     sheet = ss.insertSheet(CONFIG.SHEET_NAME);
@@ -31,7 +34,7 @@ function setupSheet() {
   
   // Ajouter les en-têtes si vides
   const currentHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn() || 1).getValues()[0];
-  if (currentHeaders[0] === "") {
+  if (!currentHeaders || currentHeaders[0] === "") {
     sheet.getRange(1, 1, 1, CONFIG.COLUMNS.length).setValues([CONFIG.COLUMNS]);
     sheet.getRange(1, 1, 1, CONFIG.COLUMNS.length).setFontWeight("bold").setBackground("#e0e0e0");
     sheet.setFrozenRows(1);
@@ -57,9 +60,18 @@ function setupSheet() {
     sheet.setColumnWidth(7, 150); // Auteur
     sheet.setColumnWidth(8, 150); // Statut
     sheet.setColumnWidth(9, 400); // Résumé
+    sheet.setColumnWidth(CONFIG.COL.PUBLISHED, 400); // Réponse publiée
   }
   
-  SpreadsheetApp.getUi().alert('✅ Initialisation terminée. La feuille est prête à recevoir les questions de l\'extension.');
+  if (!isSilent) {
+    try {
+      SpreadsheetApp.getUi().alert('✅ Initialisation terminée. La feuille est prête à recevoir les questions de l\'extension.');
+    } catch (e) {
+      // Ignorer l'absence d'UI (contexte non interactif)
+    }
+  }
+
+  return sheet;
 }
 
 /**
@@ -83,7 +95,7 @@ function relaunchGemini() {
   }
 
   // Récupérer le titre (colonne 5) comme contexte pour l'analyse
-  const title = sheet.getRange(row, 5).getValue();
+  const title = sheet.getRange(row, CONFIG.COL.TITLE).getValue();
   
   if (!title) {
     SpreadsheetApp.getUi().alert('❌ Le titre de la question est manquant sur cette ligne.');
@@ -95,21 +107,35 @@ function relaunchGemini() {
   
   if (response === ui.Button.OK) {
     // On met un indicateur visuel (Le résumé est maintenant en colonne 9)
-    const summaryCell = sheet.getRange(row, 9);
+    const summaryCell = sheet.getRange(row, CONFIG.COL.SUMMARY);
     summaryCell.setValue('⏳ Analyse Gemini en cours...');
     SpreadsheetApp.flush();
     
-    // On relance la génération en passant la question ou le titre
-    const product = sheet.getRange(row, 4).getValue() || "Inconnu";
-    const questionText = sheet.getRange(row, 6).getValue();
-    const author = sheet.getRange(row, 7).getValue() || "Auteur inconnu";
-    const promptText = questionText ? "Question : " + questionText : "Titre : " + title;
-    
-    const newSummary = generateSummaryWithGemini(promptText, author, product);
-    
+    // On relance la génération en passant la question, ou le titre à défaut
+    const product = sheet.getRange(row, CONFIG.COL.PRODUCT).getValue() || "Inconnu";
+    const questionText = sheet.getRange(row, CONFIG.COL.QUESTION).getValue();
+    const author = sheet.getRange(row, CONFIG.COL.AUTHOR).getValue() || "Auteur inconnu";
+
+    const reply = generateReply(questionText || title, author, product);
+
     // Application du RichText pour gérer le Gras et les puces
-    const richText = formatMarkdownToRichText(newSummary);
-    summaryCell.setRichTextValue(richText);
+    summaryCell.setRichTextValue(formatMarkdownToRichText(reply.text));
+    sheet.getRange(row, CONFIG.COL.NOTES).setValue(buildNote_("Relancé manuellement", reply));
+
+    // Avertir explicitement quand la proposition ne doit pas être publiée telle quelle
+    if (reply.status === 'CLARIFICATION') {
+      ui.alert(
+        'À clarifier',
+        "Les informations de ce thread sont insuffisantes pour une réponse fiable.\n\n" +
+        "Gemini a rédigé une demande de précisions plutôt qu'une procédure : publier une " +
+        "procédure générique ici produirait une réponse plausible mais inapplicable.",
+        ui.ButtonSet.OK
+      );
+    } else if (reply.status === 'HORS_SUJET') {
+      ui.alert('Hors sujet', "Cette demande ne semble pas relever de ce forum. Relisez la proposition avant toute publication.", ui.ButtonSet.OK);
+    } else if (reply.confidence === 'FAIBLE') {
+      ui.alert('Confiance faible', "Gemini signale une confiance faible sur cette réponse. Vérifiez chaque affirmation avant de publier.", ui.ButtonSet.OK);
+    }
   }
 }
 
@@ -146,20 +172,3 @@ function showAvailableModels() {
   }
 }
 
-/**
- * Fonction de debug pour tester le RichText
- */
-function testRichText() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getActiveSheet();
-  const row = sheet.getActiveRange().getRow();
-  if (row <= 1) return;
-  
-  const text = `Voici un test avec **du gras** et :
-* Puce 1
-* Puce 2
-### Titre 3`;
-  
-  const richText = formatMarkdownToRichText(text);
-  sheet.getRange(row, 9).setRichTextValue(richText);
-}

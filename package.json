@@ -1,0 +1,10 @@
+{
+  "name": "community-console-pe-tracker",
+  "version": "1.8.0",
+  "description": "Outil de suivi Community Console pour Product Experts Google",
+  "private": true,
+  "scripts": {
+    "test": "node tests/run.js"
+  },
+  "license": "MIT"
+}
