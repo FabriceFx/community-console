@@ -1,6 +1,6 @@
 # Outil de suivi Community Console (PE Tracker)
 
-[![Version](https://img.shields.io/badge/version-1.12.2-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.12.3-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Chrome MV3](https://img.shields.io/badge/Chrome-Manifest_V3-green.svg)](extension/manifest.json)
 [![Google Apps Script](https://img.shields.io/badge/Backend-Google_Apps_Script-blue.svg)](gas/)
@@ -84,6 +84,15 @@ Cet outil complet est destiné aux **Product Experts (PE) Google** pour automati
 3. Dans la carte **Secret partagé**, cliquez sur **🎲 Générer un nouveau secret**, puis **Sauvegarder**.
    - ⚠️ Ce secret est **obligatoire** : la WebApp étant déployée en accès « N'importe qui », il constitue la seule barrière empêchant un tiers qui connaîtrait votre URL `/exec` d'écrire dans votre feuille et de consommer votre quota Gemini.
    - Recopiez-le ensuite dans l'extension Chrome et sur la WebApp mobile (il n'est demandé qu'une fois par appareil).
+
+#### ⚠️ Mettre à jour le backend
+Le projet Apps Script et l'extension Chrome se déploient **séparément**. Recharger l'extension ne met pas à jour la WebApp.
+
+Après toute modification des fichiers `gas/` :
+1. Recopiez-les dans votre projet Apps Script.
+2. **Déployer > Gérer les déploiements > ✏️ (modifier) > Version : Nouvelle version > Déployer.**
+
+Sans cette seconde étape, la WebApp continue de servir l'ancien code : l'extension détecte l'écart de version et vous en avertit.
 
 #### 3. Installation de l'Extension Chrome
 1. Ouvrez Chrome et rendez-vous sur `chrome://extensions/`.

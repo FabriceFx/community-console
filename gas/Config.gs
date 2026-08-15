@@ -3,6 +3,12 @@
  */
 
 const CONFIG = {
+  // Version du backend, à tenir alignée sur extension/manifest.json.
+  // L'extension la compare à la sienne : le projet Apps Script et l'extension se
+  // déploient séparément, et un backend resté en arrière produit des comportements
+  // incompréhensibles côté navigateur.
+  VERSION: "1.12.3",
+
   // Nom de la feuille de calcul principale
   SHEET_NAME: "Suivi Questions",
 

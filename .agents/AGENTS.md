@@ -5,6 +5,8 @@
 
 ## Versionning de l'extension Chrome & du Projet
 - À chaque modification, correction de bug ou nouvelle fonctionnalité apportée au projet ou à l'extension, le numéro de version (`MAJOR.MINOR.PATCH`) dans `extension/manifest.json` doit impérativement être incrémenté (notamment le dernier digit `PATCH` pour les corrections) et aligné avec les fichiers `CHANGELOG.md` et `README.md`.
+- **`CONFIG.VERSION` dans `gas/Config.gs` doit être aligné sur la même valeur.** L'extension la compare à la sienne et signale un écart : le projet Apps Script et l'extension se déploient séparément, et un backend resté en arrière produit des symptômes sans rapport apparent avec la cause.
+- Redéployer le backend ne consiste pas seulement à copier les fichiers : la WebApp sert la **version de déploiement**, pas le code enregistré. Il faut créer une nouvelle version via *Déployer > Gérer les déploiements > ✏️ > Version : Nouvelle version*.
 
 ## Qualité des réponses publiées
 Les messages générés sont publiés sur des forums publics et relus par d'autres Product Experts. Deux règles priment sur toute autre considération :

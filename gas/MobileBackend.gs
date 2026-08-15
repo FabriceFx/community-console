@@ -164,6 +164,7 @@ function processMobileThreadUrl(threadUrl, providedAuthor, providedContent, prov
 
   return {
     status: "success",
+    backendVersion: CONFIG.VERSION,
     id: newId,
     title: title,
     author: author,

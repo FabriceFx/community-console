@@ -146,6 +146,7 @@ async function enregistrerReponsePubliee(text) {
     });
 
     const data = (response && response.success) ? response.data : null;
+    verifierVersionBackend(data);
     const ok = !!(data && data.status === 'success');
 
     if (ok) {
@@ -163,6 +164,42 @@ async function enregistrerReponsePubliee(text) {
     console.warn("Enregistrement de la réponse publiée impossible :", e);
     return { ok: false, modified: false, editRatio: 0 };
   }
+}
+
+let alerteVersionAffichee = false;
+
+/**
+ * Compare la version du backend à celle de l'extension.
+ *
+ * Le projet Apps Script et l'extension se déploient séparément : recharger l'extension
+ * ne met pas à jour la WebApp. Un backend resté en arrière renvoie d'anciens messages
+ * et ignore les nouveaux champs, ce qui produit des symptômes sans rapport apparent
+ * avec la cause. Mieux vaut le dire explicitement.
+ *
+ * @param {Object} data La réponse reçue du backend
+ */
+function verifierVersionBackend(data) {
+  if (!data || !data.backendVersion || alerteVersionAffichee) return;
+
+  const locale = (chrome.runtime && chrome.runtime.getManifest)
+    ? chrome.runtime.getManifest().version : '';
+
+  if (!locale || data.backendVersion === locale) return;
+
+  alerteVersionAffichee = true;
+  console.log(
+    "%c[PE Tracker] Backend en v" + data.backendVersion + ", extension en v" + locale + ".",
+    'color:#d93025;font-weight:bold'
+  );
+  alert(
+    "⚠️ Backend non redéployé\n\n" +
+    "Extension : v" + locale + "\n" +
+    "Apps Script : v" + data.backendVersion + "\n\n" +
+    "Le projet Apps Script et l'extension se mettent à jour séparément. Copiez les fichiers " +
+    "du dossier gas/ dans votre projet, puis créez une NOUVELLE VERSION de déploiement " +
+    "(Déployer > Gérer les déploiements > ✏️ > Version : Nouvelle version).\n\n" +
+    "Sans cela, la WebApp continue de servir l'ancien code."
+  );
 }
 
 // Surveillance de la publication.
@@ -1174,6 +1211,7 @@ function creerBoutonRelance(premiereIntervention) {
       });
 
       let data = (response && response.success) ? response.data : null;
+      verifierVersionBackend(data);
 
       // Fil pas encore suivi : on l'enregistre sans générer de réponse initiale
       // (inutile ici, et coûteuse en quota), puis on relance le traitement.
@@ -1395,6 +1433,7 @@ function creerBoutonPrincipal() {
       console.log("Réponse reçue :", response);
 
       const data = (response && response.success && response.data) ? response.data : null;
+      verifierVersionBackend(data);
 
       if (data && data.status === 'error') {
         alert("Le backend a refusé la demande :\n\n" + (data.message || 'Erreur inconnue'));

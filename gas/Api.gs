@@ -8,7 +8,12 @@
  * @returns {GoogleAppsScript.Content.TextOutput}
  */
 function jsonOutput_(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj))
+  // La version accompagne chaque réponse : elle permet à l'extension de détecter
+  // un backend non redéployé, cause de pannes autrement indéchiffrables.
+  const charge = obj || {};
+  charge.backendVersion = CONFIG.VERSION;
+
+  return ContentService.createTextOutput(JSON.stringify(charge))
     .setMimeType(ContentService.MimeType.JSON);
 }
 

@@ -2,6 +2,18 @@
 
 Toutes les modifications notables apportées à ce projet sont documentées dans ce fichier.
 
+## [1.12.3] - 2026-08-15
+
+### 🔀 Détection d'un Backend Non Redéployé
+
+> **« Ce thread n'est pas encore suivi. Cliquez d'abord sur Suivre dans Sheets » — alors que le fil avait bien reçu une réponse.**
+> Ce message n'existe plus dans le code depuis la 1.10.2. Il provenait de la WebApp Apps Script, restée sur une version antérieure : l'extension et le backend se déploient séparément, et recharger l'extension ne met pas à jour la WebApp.
+
+- **Version portée par chaque réponse (`CONFIG.VERSION`, `jsonOutput_`)** : Le backend annonce sa version dans toutes ses réponses, y compris celles de la WebApp mobile.
+- **Comparaison côté extension (`verifierVersionBackend`)** : Un écart déclenche un avertissement unique indiquant les deux versions et la marche à suivre.
+- **Marche à suivre explicitée** : Copier les fichiers `gas/` ne suffit pas — la WebApp sert la *version de déploiement*, pas le code enregistré. Il faut créer une nouvelle version via *Déployer > Gérer les déploiements > ✏️ > Version : Nouvelle version*.
+- **Consigne inscrite dans `AGENTS.md` et le README** : `CONFIG.VERSION` fait désormais partie du rituel d'incrémentation, au même titre que `manifest.json`, `CHANGELOG.md` et `README.md`.
+
 ## [1.12.2] - 2026-08-15
 
 ### 🚪 L'Analyse du Fil Était Inatteignable dès le Bouton Posé
