@@ -1,6 +1,6 @@
 # Outil de suivi Community Console (PE Tracker)
 
-[![Version](https://img.shields.io/badge/version-1.8.1-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.8.3-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Chrome MV3](https://img.shields.io/badge/Chrome-Manifest_V3-green.svg)](extension/manifest.json)
 [![Google Apps Script](https://img.shields.io/badge/Backend-Google_Apps_Script-blue.svg)](gas/)
@@ -32,6 +32,7 @@ Cet outil complet est destiné aux **Product Experts (PE) Google** pour automati
 #### 🗣️ Qualité et Naturel des Réponses
 - **Refus de répondre à côté** : Chaque thread est classé en `REPONSE`, `CLARIFICATION` ou `HORS_SUJET`. Lorsqu'un élément manque (source de données, message d'erreur, version, étapes déjà tentées), l'outil rédige une demande de précisions au lieu d'une procédure générique inapplicable.
 - **Niveau de confiance affiché** : `HAUTE`, `MOYENNE` ou `FAIBLE`, reporté dans la colonne *Notes* de la feuille et signalé par un avertissement avant publication.
+- **Alerte sur les chemins d'interface non sourcés** : Une procédure « cliquez ici puis là » rédigée sans qu'aucune source n'ait été consultée provient de la mémoire du modèle, donc d'un état passé de l'interface. Les libellés de menus Google étant fréquemment renommés ou supprimés, ces réponses sont rétrogradées en confiance faible et signalées avant publication.
 - **Formules d'accueil et de clôture variables** : Trois accueils et quatre clôtures par langue, tirés sans répétition immédiate, pour que deux réponses successives ne soient pas identifiables à leur emballage.
 - **Filtre anti-tics** : Suppression automatique des formules « Voici les étapes à suivre », « En résumé », « Il est important de noter que », « J'espère que cela vous aidera », des titres décoratifs et des séparateurs.
 - **Procédure officielle de récupération de compte** : Toute réponse portant sur une perte d'accès se termine par `https://g.co/recover`, avec une phrase d'introduction adaptée selon que la personne a déjà tenté la procédure ou non. Ce lien est protégé contre la validation HTTP et ne peut jamais être supprimé d'une réponse.

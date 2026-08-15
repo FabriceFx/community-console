@@ -143,6 +143,50 @@ function resolveRedirectUrl(url) {
 }
 
 /**
+ * Extrait et résout les URL sources retournées par le grounding googleSearch.
+ * @param {Object} candidate Le candidat retourné par l'API Gemini
+ * @returns {Array<string>} Les URL sources résolues
+ */
+function extraireUrlsGrounding_(candidate) {
+  const urls = [];
+  if (candidate && candidate.groundingMetadata && candidate.groundingMetadata.groundingChunks) {
+    candidate.groundingMetadata.groundingChunks.forEach((chunk) => {
+      if (chunk.web && chunk.web.uri) {
+        urls.push(resolveRedirectUrl(chunk.web.uri));
+      }
+    });
+  }
+  return urls;
+}
+
+// Verbes d'action décrivant une navigation dans une interface, dans les cinq langues gérées.
+// Leur accumulation signale une procédure « cliquez ici puis là » — le format le plus
+// exposé à l'obsolescence, car les intitulés de menus Google changent régulièrement.
+const VERBES_NAVIGATION = new RegExp(
+  '\\b(' +
+  'cliquez|clique|sélectionnez|selectionnez|choisissez|rendez-vous dans|appuyez sur|ouvrez le menu|' +
+  'click|select|choose|go to|tap on|navigate to|' +
+  'klicken|wählen|' +
+  'haga clic|seleccione|elija|' +
+  'fai clic|clicca|seleziona|scegli' +
+  ')\\b', 'gi');
+
+/**
+ * Détecte une procédure pas-à-pas décrivant un parcours dans l'interface.
+ *
+ * Ce format est celui qui vieillit le plus mal : il paraît parfaitement fiable et
+ * devient inapplicable dès qu'un libellé de menu est renommé, déplacé ou supprimé.
+ * Non sourcé, il mérite un avertissement avant publication.
+ *
+ * @param {string} body Le corps du message généré
+ * @returns {boolean} true si le texte enchaîne au moins deux étapes de navigation
+ */
+function contientCheminInterface_(body) {
+  const matches = String(body || '').match(VERBES_NAVIGATION);
+  return !!matches && matches.length >= 2;
+}
+
+/**
  * Nettoie les URL générées par Gemini en s'appuyant sur le grounding et en éliminant les liens 404 et redirections Vertex.
  *
  * Un lien mort n'est JAMAIS remplacé par une autre URL : une source sans rapport avec son libellé
@@ -161,14 +205,7 @@ function cleanAndValidateUrls(text, candidate) {
   const DROPPED = '\u0000';
 
   // 1. Extraire et résoudre les URL de redirection Vertex AI depuis les groundingChunks
-  const verifiedUrls = [];
-  if (candidate && candidate.groundingMetadata && candidate.groundingMetadata.groundingChunks) {
-    candidate.groundingMetadata.groundingChunks.forEach(chunk => {
-      if (chunk.web && chunk.web.uri) {
-        verifiedUrls.push(resolveRedirectUrl(chunk.web.uri));
-      }
-    });
-  }
+  const verifiedUrls = extraireUrlsGrounding_(candidate);
 
   const urlCache = {};
   const isVerified = (a, b) =>
@@ -435,7 +472,18 @@ Exemple de ce qu'il ne faut jamais faire : quelqu'un demande comment extraire de
 Une procédure plausible mais inapplicable est le pire résultat possible. Dans le doute, demande.
 
 RÈGLE ABSOLUE N°2 — NE JAMAIS INVENTER
-Aucune URL, aucun identifiant d'article, aucun nom de menu, d'option ou de paramètre dont tu n'es pas certain. Utilise uniquement les URL exactes renvoyées par googleSearch. Si tu n'es pas sûr d'un intitulé d'interface, décris l'emplacement sans le nommer précisément.
+Aucune URL, aucun identifiant d'article, aucun nom de menu, d'option ou de paramètre dont tu n'es pas certain. Utilise uniquement les URL exactes renvoyées par googleSearch.
+
+RÈGLE ABSOLUE N°3 — LES NOMS DE MENUS SONT LE PIÈGE PRINCIPAL
+Les interfaces Google changent en permanence : des options sont renommées, déplacées ou supprimées. Ta mémoire d'entraînement décrit un état passé de l'interface. Une suite d'étapes du type « Cliquez sur X, puis sélectionnez Y » est le format le plus dangereux qui soit : elle paraît parfaitement fiable, et devient inapplicable dès qu'un libellé a changé. La personne cherche alors un menu qui n'existe plus et perd confiance dans la réponse.
+Tu ne cites le nom exact d'un menu, d'un onglet ou d'une option QUE si ce libellé apparaît littéralement dans un résultat googleSearch que tu viens de consulter.
+À défaut :
+- décris l'emplacement fonctionnellement, sans inventer d'intitulé : « dans les paramètres d'affichage », « depuis la roue dentée en haut à droite » ;
+- indique que l'emplacement exact a pu changer selon la version ;
+- renvoie vers l'article du Centre d'aide, qui est à jour, plutôt que de détailler des étapes de mémoire ;
+- si la personne dit ne pas trouver une option, envisage explicitement qu'elle ait été supprimée ou déplacée, au lieu de répéter le même chemin.
+Mieux vaut « ce réglage se trouve dans les paramètres d'affichage, voir l'article ci-dessous » qu'une suite d'étapes fausse.
+Dans le doute sur un libellé : CONFIANCE ne peut pas être HAUTE.
 
 FORMAT DE SORTIE OBLIGATOIRE
 Commence impérativement par ces trois lignes, puis une ligne contenant uniquement ---, puis le message :
@@ -490,6 +538,53 @@ Adapte la phrase qui l'introduit au cas de la personne :
 - si elle n'a pas encore tenté la procédure, indique-lui de la suivre depuis un appareil et un lieu qu'elle utilise habituellement pour ce compte, et de répondre à un maximum de questions même approximativement ;
 - si elle indique l'avoir déjà tentée sans succès, dis-le clairement : c'est malgré tout la seule voie possible, et la réessayer depuis un appareil déjà utilisé pour se connecter à ce compte, sur son réseau habituel, augmente réellement les chances d'aboutir ;
 - si les éléments montrent que la récupération est sans issue, indique que la procédure reste le seul recours mais qu'elle a peu de chances d'aboutir en l'état, plutôt que de laisser espérer.` + buildStyleExamplesSection_();
+}
+
+/**
+ * Concatène le texte de toutes les parties renvoyées par le modèle.
+ *
+ * Ne lire que `parts[0]` tronque la réponse dès que l'API la découpe en plusieurs
+ * parties — ce qui arrive notamment lorsque le modèle produit un raisonnement interne
+ * avant son texte, ou lorsque le grounding segmente la sortie.
+ * Les parties marquées comme réflexion (`thought`) sont exclues : elles ne sont pas
+ * destinées à être publiées.
+ *
+ * @param {Object} candidate Le candidat retourné par l'API Gemini
+ * @returns {string} Le texte complet destiné à l'utilisateur
+ */
+function extraireTexteCandidat_(candidate) {
+  if (!candidate || !candidate.content || !Array.isArray(candidate.content.parts)) return '';
+
+  return candidate.content.parts
+    .filter((part) => part && typeof part.text === 'string' && part.thought !== true)
+    .map((part) => part.text)
+    .join('')
+    .trim();
+}
+
+/**
+ * Détecte une réponse interrompue en cours de rédaction.
+ *
+ * Filet complémentaire à `finishReason` : une phrase qui s'arrête sans ponctuation
+ * finale signale une coupure, même quand l'API annonce une fin normale.
+ *
+ * @param {string} text Le corps du message
+ * @returns {boolean} true si le texte semble inachevé
+ */
+function sembleTronque_(text) {
+  const propre = String(text || '').trim();
+  if (!propre) return true;
+
+  const lignes = propre.split('\n').filter((l) => l.trim());
+  if (!lignes.length) return true;
+
+  const derniere = lignes[lignes.length - 1].trim();
+
+  // Une ligne de source se termine légitimement par une URL, sans ponctuation
+  if (/https?:\/\/\S+$/.test(derniere)) return false;
+
+  // Fin de liste à puces correctement ponctuée
+  return !/[.!?…:»"'’)\]]$/.test(derniere);
 }
 
 /**
@@ -870,7 +965,7 @@ Message publié sur le forum :
 ${sanitizedContent}
 """`;
 
-  const payload = {
+  const construirePayload = (maxTokens) => ({
     "systemInstruction": {
       "parts": [{ "text": buildSystemInstruction_() }]
     },
@@ -886,41 +981,70 @@ ${sanitizedContent}
       // ce qui rend la série de messages reconnaissable comme automatisée.
       "temperature": 0.85,
       "topP": 0.95,
-      "maxOutputTokens": 1200
+      // Budget large : sur un modèle qui raisonne avant de répondre, les jetons de
+      // réflexion se déduisent de cette même enveloppe et amputaient le texte visible.
+      "maxOutputTokens": maxTokens
     }
-  };
+  });
 
-  const options = {
+  const construireOptions = (maxTokens) => ({
     "method": "post",
     "contentType": "application/json",
     // La clé transite par un en-tête et jamais par l'URL : les messages d'exception
     // d'Apps Script incluent l'URL appelée et finiraient dans les journaux et l'interface.
     "headers": { "x-goog-api-key": apiKey },
-    "payload": JSON.stringify(payload),
+    "payload": JSON.stringify(construirePayload(maxTokens)),
     "muteHttpExceptions": true
-  };
+  });
 
   try {
-    const response = fetchWithRetry(apiUrl, options);
-    const json = JSON.parse(response.getContentText());
+    let candidate = null;
+    let rawText = '';
+    let tronque = false;
+    let maxTokens = CONFIG.MAX_OUTPUT_TOKENS;
 
-    if (json.error) {
-      console.error("Erreur API Gemini : " + redactSecrets_(json.error.message));
-      return {
-        ok: false,
-        status: 'ERREUR',
-        confidence: 'FAIBLE',
-        lang: 'fr',
-        text: `Erreur API : ${redactSecrets_(json.error.message)}`
-      };
+    // Une réponse coupée en pleine phrase est inexploitable : on relance une fois
+    // avec un budget doublé avant de renoncer.
+    for (let tentative = 0; tentative < 2; tentative++) {
+      const response = fetchWithRetry(apiUrl, construireOptions(maxTokens));
+      const json = JSON.parse(response.getContentText());
+
+      if (json.error) {
+        console.error("Erreur API Gemini : " + redactSecrets_(json.error.message));
+        return {
+          ok: false,
+          status: 'ERREUR',
+          confidence: 'FAIBLE',
+          lang: 'fr',
+          text: `Erreur API : ${redactSecrets_(json.error.message)}`
+        };
+      }
+
+      candidate = (json.candidates && json.candidates.length > 0) ? json.candidates[0] : null;
+      if (!candidate) break;
+
+      // Un blocage de sécurité ou de récitation ne se corrige pas en relançant
+      if (candidate.finishReason && ['SAFETY', 'RECITATION', 'BLOCKLIST', 'PROHIBITED_CONTENT'].indexOf(candidate.finishReason) !== -1) {
+        console.warn("Génération interrompue par l'API : " + candidate.finishReason);
+        return {
+          ok: false,
+          status: 'ERREUR',
+          confidence: 'FAIBLE',
+          lang: 'fr',
+          text: "La génération a été interrompue par l'API (" + candidate.finishReason + "). Rédigez cette réponse manuellement."
+        };
+      }
+
+      rawText = extraireTexteCandidat_(candidate);
+      tronque = candidate.finishReason === 'MAX_TOKENS' || sembleTronque_(parseModelEnvelope_(rawText).body);
+
+      if (!tronque) break;
+
+      console.warn("Réponse tronquée (finishReason : " + candidate.finishReason + ", budget : " + maxTokens + "). Nouvelle tentative avec un budget doublé.");
+      maxTokens *= 2;
     }
 
-    if (json.candidates && json.candidates.length > 0) {
-      const candidate = json.candidates[0];
-      const rawText = (candidate.content && candidate.content.parts && candidate.content.parts[0].text)
-        ? candidate.content.parts[0].text.trim()
-        : '';
-
+    if (candidate) {
       if (!rawText) {
         return {
           ok: false,
@@ -943,11 +1067,24 @@ ${sanitizedContent}
       // peut être recopié tel quel dans une réponse d'une autre langue : on le réaligne.
       const localise = localiserLigneRecuperation_(humanized, lang);
 
+      // Une procédure pas-à-pas dans l'interface, rédigée sans aucune source consultée,
+      // provient nécessairement de la mémoire d'entraînement du modèle — donc d'un état
+      // passé de l'interface. Les libellés de menus Google sont renommés ou supprimés
+      // régulièrement : la réponse paraît sûre et envoie chercher un menu inexistant.
+      const cheminNonSource = contientCheminInterface_(localise) && extraireUrlsGrounding_(candidate).length === 0;
+      const confidence = (cheminNonSource || tronque) ? 'FAIBLE' : envelope.confidence;
+
+      if (tronque) {
+        console.warn("Réponse toujours tronquée après relance : signalée comme incomplète.");
+      }
+
       return {
         ok: true,
         status: envelope.status,
-        confidence: envelope.confidence,
+        confidence: confidence,
         lang: lang,
+        uiPathUnsourced: cheminNonSource,
+        truncated: tronque,
         text: buildFormattedResponse(lang, authorName, product, localise, envelope.status)
       };
     }

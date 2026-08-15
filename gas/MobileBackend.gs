@@ -171,6 +171,8 @@ function processMobileThreadUrl(threadUrl, providedAuthor, providedContent, prov
     summary: summary,
     replyStatus: reply.status,
     confidence: reply.confidence,
+    uiPathUnsourced: !!reply.uiPathUnsourced,
+    truncated: !!reply.truncated,
     // Signale à l'interface que Gemini n'a travaillé que sur le titre du thread
     contentIsThin: contentIsThin
   };

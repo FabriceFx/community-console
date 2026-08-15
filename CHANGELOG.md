@@ -2,6 +2,36 @@
 
 Toutes les modifications notables apportées à ce projet sont documentées dans ce fichier.
 
+## [1.8.3] - 2026-08-15
+
+### ✂️ Réponses Tronquées : Détection, Relance et Refus d'Injection
+
+> **Une réponse s'arrêtait au milieu d'une phrase — « je pense que récupérer l'accès à votre compte » — sans lien de récupération ni conclusion.**
+> Trois défauts cumulés faisaient passer une génération interrompue pour une réponse terminée.
+
+- **Lecture de toutes les parties (`extraireTexteCandidat_`)** : Seule `candidate.content.parts[0]` était lue. L'API découpe la sortie en plusieurs parties dès que le modèle produit un raisonnement interne avant son texte : tout ce qui suivait la première partie était perdu. Les parties marquées `thought` sont exclues, n'étant pas destinées à publication.
+- **Vérification de `finishReason`** : Le champ n'était jamais consulté. Une coupure sur `MAX_TOKENS` produisait silencieusement une réponse amputée. Les arrêts sur `SAFETY`, `RECITATION`, `BLOCKLIST` et `PROHIBITED_CONTENT` renvoient désormais une erreur explicite, sans relance inutile.
+- **Budget de génération porté à 4 096 jetons (`CONFIG.MAX_OUTPUT_TOKENS`)** : Les 1 200 jetons précédents étaient trop justes — sur un modèle qui raisonne avant de répondre, les jetons de réflexion se déduisent de la même enveloppe et amputent le texte visible.
+- **Relance automatique** : Une réponse détectée comme tronquée déclenche une seconde tentative avec un budget doublé, avant tout signalement.
+- **Filet complémentaire (`sembleTronque_`)** : Une dernière ligne dépourvue de ponctuation finale signale une coupure même lorsque l'API annonce une fin normale. Les lignes se terminant par une URL de source sont exclues de ce contrôle.
+- **Refus d'injection (`extension/content.js`)** : Un texte incomplet n'est plus placé dans le champ de réponse — le risque de le publier par réflexe est trop élevé. Il est copié dans le presse-papier, accompagné d'un avertissement.
+- **Signalement partout** : Confiance forcée à `FAIBLE`, note « ❌ réponse incomplète — génération interrompue, à reprendre » dans la feuille, avertissement dans l'extension, la WebApp mobile et la relance depuis Sheets.
+- **Couverture de test (`tests/08-reponse-tronquee.test.js`)** : 17 cas, dont la réponse réellement rencontrée, la concaténation multi-parties et l'exclusion du raisonnement interne.
+
+## [1.8.2] - 2026-08-15
+
+### 🧭 Noms de Menus : Fin des Procédures Inventées
+
+> **Une réponse envoyait chercher un menu « Densité et couleur » dans Google Agenda, introuvable dans l'interface.**
+> C'est la variante la plus retorse de la réponse « plausible mais fausse » : une suite d'étapes numérotées inspire confiance, et devient inapplicable dès qu'un libellé a été renommé, déplacé ou supprimé. Le modèle décrit l'interface telle qu'elle était dans ses données d'entraînement.
+
+- **Règle absolue n°3 (`gas/Gemini.gs`)** : Le nom exact d'un menu, d'un onglet ou d'une option ne peut être cité que s'il apparaît littéralement dans un résultat googleSearch consulté. À défaut : décrire l'emplacement fonctionnellement, signaler que la position a pu changer, et renvoyer vers l'article du Centre d'aide — qui, lui, est à jour.
+- **Prise en compte du « je ne trouve pas »** : Lorsqu'une personne signale ne pas trouver une option, le modèle doit envisager qu'elle ait été supprimée ou déplacée, au lieu de répéter le même chemin.
+- **Détection automatique (`contientCheminInterface_`)** : Repère l'enchaînement d'au moins deux verbes de navigation dans les cinq langues gérées.
+- **Rétrogradation de la confiance** : Une procédure pas-à-pas produite sans aucune source de grounding force `CONFIANCE` à `FAIBLE`, quel que soit l'avis du modèle sur lui-même.
+- **Avertissement dans les quatre interfaces** : Extension, WebApp mobile, relance depuis Sheets et colonne *Notes* signalent « chemin d'interface non sourcé — vérifier les libellés de menus ».
+- **Couverture de test (`tests/07-chemin-interface.test.js`)** : 17 cas, dont la réponse Google Agenda réellement rencontrée, les quatre autres langues, et les réponses sans parcours d'interface qui ne doivent pas déclencher d'alerte.
+
 ## [1.8.1] - 2026-08-15
 
 ### 🌍 Cohérence Linguistique de la Ligne de Récupération

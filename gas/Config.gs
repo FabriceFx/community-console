@@ -41,6 +41,10 @@ const CONFIG = {
   // Nombre d'exemples de style réinjectés dans le prompt (voir getStyleExamples_)
   STYLE_EXAMPLES_COUNT: 3,
 
+  // Budget de génération. Large à dessein : sur un modèle qui raisonne avant de répondre,
+  // les jetons de réflexion se déduisent de cette enveloppe et tronquaient le texte visible.
+  MAX_OUTPUT_TOKENS: 4096,
+
   // Part minimale de mots réécrits pour qu'une réponse publiée compte comme retouchée.
   // En deçà, elle n'apprend rien au modèle sur le style du PE et n'est pas conservée.
   MIN_EDIT_RATIO: 0.05,

@@ -123,7 +123,14 @@ function relaunchGemini() {
     sheet.getRange(row, CONFIG.COL.NOTES).setValue(buildNote_("Relancé manuellement", reply));
 
     // Avertir explicitement quand la proposition ne doit pas être publiée telle quelle
-    if (reply.status === 'CLARIFICATION') {
+    if (reply.truncated) {
+      ui.alert(
+        'Réponse incomplète',
+        "La génération s'est interrompue en cours de rédaction, même après une relance avec un budget doublé.\n\n" +
+        "Ne publiez pas ce texte tel quel : relancez l'analyse ou rédigez la réponse à la main.",
+        ui.ButtonSet.OK
+      );
+    } else if (reply.status === 'CLARIFICATION') {
       ui.alert(
         'À clarifier',
         "Les informations de ce thread sont insuffisantes pour une réponse fiable.\n\n" +
@@ -133,6 +140,14 @@ function relaunchGemini() {
       );
     } else if (reply.status === 'HORS_SUJET') {
       ui.alert('Hors sujet', "Cette demande ne semble pas relever de ce forum. Relisez la proposition avant toute publication.", ui.ButtonSet.OK);
+    } else if (reply.uiPathUnsourced) {
+      ui.alert(
+        "Chemin d'interface non sourcé",
+        "Cette réponse décrit une suite d'étapes dans l'interface sans qu'aucune source n'ait été consultée.\n\n" +
+        "Les libellés de menus proviennent de la mémoire du modèle, donc d'un état passé de l'interface. " +
+        "Vérifiez chaque nom de menu avant de publier : les options Google sont fréquemment renommées, déplacées ou supprimées.",
+        ui.ButtonSet.OK
+      );
     } else if (reply.confidence === 'FAIBLE') {
       ui.alert('Confiance faible', "Gemini signale une confiance faible sur cette réponse. Vérifiez chaque affirmation avant de publier.", ui.ButtonSet.OK);
     }

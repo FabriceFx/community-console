@@ -617,15 +617,25 @@ function initTracker() {
       // Avertir AVANT relecture quand la proposition ne doit pas être publiée telle quelle.
       // C'est ce garde-fou qui évite de poster une procédure générique sur une question
       // à laquelle il manque un élément (source de données, message d'erreur, version...).
-      if (data && data.replyStatus === 'CLARIFICATION') {
+      if (data && data.truncated) {
+        alert("❌ Réponse incomplète\n\nLa génération s'est interrompue en cours de rédaction, même après une relance avec un budget doublé.\n\nLe texte n'a pas été placé dans le champ de réponse pour éviter toute publication accidentelle : il a été copié dans le presse-papier. Relancez l'analyse ou rédigez la réponse à la main.");
+      } else if (data && data.replyStatus === 'CLARIFICATION') {
         alert("⚠️ Informations insuffisantes\n\nCe thread ne contient pas les éléments nécessaires pour une réponse fiable.\n\nGemini a rédigé une demande de précisions plutôt qu'une procédure : une procédure générique serait plausible mais inapplicable.");
       } else if (data && data.replyStatus === 'HORS_SUJET') {
         alert("⚠️ Demande hors sujet\n\nRelisez entièrement la proposition avant toute publication.");
+      } else if (data && data.uiPathUnsourced) {
+        alert("⚠️ Chemin d'interface non sourcé\n\nLa réponse décrit une suite d'étapes (« cliquez sur… puis sélectionnez… ») sans qu'aucune source n'ait été consultée : les libellés viennent de la mémoire du modèle, donc d'un état passé de l'interface.\n\nVérifiez chaque nom de menu dans l'interface réelle avant de publier. Les options Google sont fréquemment renommées, déplacées ou supprimées.");
       } else if (data && data.confidence === 'FAIBLE') {
         alert("⚠️ Confiance faible\n\nGemini signale qu'il extrapole sur cette réponse. Vérifiez chaque affirmation avant de publier.");
       }
 
-      if (summaryText) {
+      if (summaryText && data && data.truncated) {
+        // Une phrase coupée en plein milieu ne doit pas atterrir dans le champ de
+        // réponse : le risque de la publier par réflexe est trop élevé.
+        try { await navigator.clipboard.writeText(summaryText); } catch (clipErr) { /* presse-papier indisponible */ }
+        btn.innerHTML = '❌ Réponse incomplète';
+        btn.style.backgroundColor = '#d93025';
+      } else if (summaryText) {
         const reponsePlacee = await injecterReponse(summaryText);
 
         if (reponsePlacee) {

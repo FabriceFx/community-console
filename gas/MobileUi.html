@@ -370,10 +370,16 @@
       const box = document.getElementById('reviewWarning');
       const messages = [];
 
+      if (response.truncated) {
+        messages.push("❌ Réponse incomplète : la génération s'est interrompue en cours de rédaction, même après relance. Ne publiez pas ce texte tel quel — relancez l'analyse ou rédigez la réponse à la main.");
+      }
+
       if (response.replyStatus === 'CLARIFICATION') {
         messages.push("⚠️ Informations insuffisantes : Gemini a rédigé une demande de précisions plutôt qu'une procédure. Ne remplacez pas ce texte par une réponse générique.");
       } else if (response.replyStatus === 'HORS_SUJET') {
         messages.push("⚠️ Demande hors sujet : relisez entièrement avant publication.");
+      } else if (response.uiPathUnsourced) {
+        messages.push("⚠️ Chemin d'interface non sourcé : les noms de menus viennent de la mémoire du modèle, pas d'une source. Vérifiez-les dans l'interface réelle — les options Google sont souvent renommées ou supprimées.");
       } else if (response.confidence === 'FAIBLE') {
         messages.push("⚠️ Confiance faible : vérifiez chaque affirmation avant de publier.");
       }

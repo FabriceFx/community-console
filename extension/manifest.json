@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Suivi PE - Community Console",
-  "version": "1.8.1",
+  "version": "1.8.3",
   "description": "Ajoute un bouton pour suivre une question dans Google Sheets depuis la Community Console.",
   "permissions": [
     "activeTab",

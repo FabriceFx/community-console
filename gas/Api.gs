@@ -110,6 +110,8 @@ function doPost(e) {
       summary: summary,
       replyStatus: reply.status,
       confidence: reply.confidence,
+      uiPathUnsourced: !!reply.uiPathUnsourced,
+      truncated: !!reply.truncated,
       lang: reply.lang
     });
 
@@ -273,6 +275,12 @@ function buildNote_(origin, reply) {
   const parts = [origin, labels[reply.status] || reply.status];
   if (reply.confidence && reply.status === 'REPONSE') {
     parts.push("confiance " + reply.confidence.toLowerCase());
+  }
+  if (reply.uiPathUnsourced) {
+    parts.push("⚠️ chemin d'interface non sourcé — vérifier les libellés de menus");
+  }
+  if (reply.truncated) {
+    parts.push("❌ réponse incomplète — génération interrompue, à reprendre");
   }
 
   return parts.join(" • ");
