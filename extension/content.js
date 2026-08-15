@@ -1,4 +1,11 @@
-console.log("Community Console PE Tracker activé.");
+// Le numéro de version permet de vérifier d'un coup d'œil que le rechargement de
+// l'extension a bien pris effet — un content script obsolète reste sinon invisible.
+console.log(
+  "%c[PE Tracker] v" +
+  ((chrome.runtime && chrome.runtime.getManifest) ? chrome.runtime.getManifest().version : '?') +
+  " activé.",
+  'color:#1a73e8;font-weight:bold'
+);
 
 // Longueur de question transmise à Gemini lorsque le sélecteur précis a fonctionné
 const MAX_CONTENT = 10000;
@@ -271,6 +278,41 @@ function trouverBoutonRepondre() {
   return null;
 }
 
+
+/**
+ * Recherche la commande « Ajouter un commentaire » qui suit un message donné.
+ *
+ * Dans la Community Console, « Répondre » ouvre une NOUVELLE réponse au fil : c'est la
+ * commande de la première intervention. Une relance se commente, et la commande à
+ * actionner est celle placée SOUS le message du demandeur — pas celle de la réponse
+ * du Product Expert, qui se trouve plus haut dans le fil.
+ *
+ * @param {HTMLElement} [messageCible] Le message après lequel chercher la commande
+ * @returns {HTMLElement|null}
+ */
+function trouverBoutonCommenter(messageCible) {
+  const estCommande = (el) => {
+    const texte = ((el.innerText || el.textContent || '') + ' ' + (el.getAttribute('aria-label') || ''))
+      .trim().toLowerCase();
+    return /ajouter un commentaire|add a comment|commenter\b|^comment$/.test(texte) && texte.length < 40;
+  };
+
+  const candidats = Array.from(document.querySelectorAll('button, [role="button"], a'))
+    .filter((el) => estCommande(el) && estVisible(el));
+
+  if (!candidats.length) return null;
+
+  // La bonne commande est la première qui suit le message visé dans l'ordre du document
+  if (messageCible && messageCible.compareDocumentPosition) {
+    const SUIT = (typeof Node !== 'undefined' && Node.DOCUMENT_POSITION_FOLLOWING) ? Node.DOCUMENT_POSITION_FOLLOWING : 4;
+    const apres = candidats.filter((c) => (messageCible.compareDocumentPosition(c) & SUIT) !== 0);
+    if (apres.length) return apres[0];
+  }
+
+  // À défaut, la dernière commande de la page correspond à l'échange le plus récent
+  return candidats[candidats.length - 1];
+}
+
 /**
  * Recherche l'élément d'édition de la réponse (Contenteditable ou Textarea).
  * @returns {HTMLElement|null}
@@ -347,22 +389,40 @@ function echapperHtml(str) {
 }
 
 /**
- * Clique sur le bouton Répondre et insère le texte généré dans la zone de réponse.
+ * Ouvre la zone d'édition appropriée et y insère le texte généré.
+ *
+ * Deux commandes distinctes selon le contexte :
+ *  - « Répondre » ouvre une NOUVELLE réponse au fil : c'est la première intervention ;
+ *  - « Ajouter un commentaire » poursuit l'échange sous une réponse existante, ce qui
+ *    est le geste attendu pour traiter une relance.
+ *
  * @param {string} text Le texte de la réponse.
+ * @param {string} [mode] 'reponse' (défaut) ou 'commentaire'
+ * @param {HTMLElement} [messageCible] Message sous lequel commenter (le dernier du fil)
  * @returns {Promise<boolean>}
  */
-async function injecterReponse(text) {
+async function injecterReponse(text, mode, messageCible) {
   if (!text) return false;
 
+  const enCommentaire = mode === 'commentaire';
+
   try {
-    let editorEl = trouverEditeurReponse();
+    // En mode commentaire, on ouvre systématiquement la zone visée : un éditeur déjà
+    // présent serait celui d'une nouvelle réponse, au mauvais endroit du fil.
+    let editorEl = enCommentaire ? null : trouverEditeurReponse();
 
     if (!editorEl) {
-      const replyBtn = trouverBoutonRepondre();
-      if (replyBtn) {
-        console.log("📌 Clic sur le bouton Répondre...", replyBtn);
-        replyBtn.click();
-        replyBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+      const bouton = enCommentaire ? trouverBoutonCommenter(messageCible) : trouverBoutonRepondre();
+
+      if (!bouton && enCommentaire) {
+        console.warn("❌ Commande « Ajouter un commentaire » introuvable.");
+        return false;
+      }
+
+      if (bouton) {
+        console.log((enCommentaire ? "💬 Clic sur Ajouter un commentaire..." : "📌 Clic sur le bouton Répondre..."), bouton);
+        bouton.click();
+        bouton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
         editorEl = await attendreEditeur(5000);
       }
     }
@@ -387,7 +447,7 @@ async function injecterReponse(text) {
 
         success = document.execCommand('insertText', false, text);
       } catch (cmdErr) {
-        console.warn("execCommand insertText a échoué, fallback sur innerHTML :", cmdErr);
+        console.log("[PE Tracker] execCommand insertText indisponible, repli sur innerHTML.", cmdErr);
       }
 
       if (!success || !editorEl.innerText.trim()) {
@@ -479,6 +539,55 @@ function afficherBoutonCapture() {
 }
 
 /**
+ * Extrait les informations du thread depuis le DOM : titre, auteur, produit, question.
+ * @returns {{title: string, author: string, product: string, content: string}}
+ */
+function extraireInfosThread() {
+  let title = "Titre inconnu";
+  let author = "Auteur inconnu";
+  let product = "Inconnu";
+  let content = "";
+
+  try {
+    const titleEl = document.querySelector('.scTailwindThreadQuestionQuestioncardtitle, h1');
+    title = titleEl ? titleEl.innerText.trim() : document.title;
+
+    const authorEl = document.querySelector('.scTailwindThreadPost_headerUserinfoname, .user-name, [data-stats-id="user-name"]');
+    if (authorEl) {
+      author = authorEl.innerText.trim();
+    } else {
+      const authorNode = document.evaluate('//*[contains(text(), "Auteur d\'origine")]/preceding-sibling::* | //*[contains(text(), "Auteur d\'origine")]/..', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+      if (authorNode && authorNode.innerText) author = authorNode.innerText.replace("Auteur d'origine", "").trim();
+    }
+
+    const productEl = document.querySelector('.scTailwindThreadQuestionForumtitleroot, a[href^="/s/community/forum/"]');
+    if (productEl) product = productEl.innerText.trim();
+
+    const contentEl = document.querySelector('.scTailwindThreadPostcontentroot, .message-content, .thread-message-content');
+    if (contentEl) {
+      content = contentEl.innerText.trim();
+    } else {
+      const contentEls = document.querySelectorAll('p');
+      if (contentEls && contentEls.length > 0) {
+        content = Array.from(contentEls).map(el => el.innerText.trim()).filter(t => t).join('\n\n').substring(0, MAX_FALLBACK_CONTENT);
+      }
+    }
+
+    const detailsEl = document.querySelector('.scTailwindThreadQuestionQuestiondetailsdetails');
+    if (detailsEl) {
+      content += "\n\nDétails techniques : " + detailsEl.innerText.trim();
+    } else {
+      const detailsNode = document.evaluate('//*[text()="Détails"]/following-sibling::*', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+      if (detailsNode) content += "\n\nDétails techniques : " + detailsNode.innerText.trim();
+    }
+  } catch (e) {
+    console.error("Erreur lors de l'extraction des données DOM :", e);
+  }
+
+  return { title: title, author: author, product: product, content: content.substring(0, MAX_CONTENT) };
+}
+
+/**
  * Retrouve l'auteur d'un bloc de message en remontant dans ses ancêtres.
  *
  * On s'arrête dès qu'un ancêtre contient PLUSIEURS noms d'utilisateur : cela signifie
@@ -510,12 +619,187 @@ function auteurDuBloc(contenu) {
   return dernierNom;
 }
 
+// Marqueurs d'interface à retirer du corps d'un message : badges, horodatages, actions.
+const LIGNES_PARASITES = [
+  // Badges d'auteur
+  /^expert produit/i,
+  /^product expert/i,
+  /^auteur d[e'’ ]origine$/i,
+  /^original poster$/i,
+  // Horodatages
+  /^il y a .{1,20}$/i,
+  /^\d+\s*(min|h|j|mois|an)s?$/i,
+  /^\d+\s*(minute|hour|day|month|year)s?$/i,
+  // Actions proposées sous chaque message
+  /^recommander$/i,
+  /^recommend$/i,
+  /^ajouter un commentaire$/i,
+  /^add a comment$/i,
+  /^répondre( au post d[e'’ ]origine)?$/i,
+  /^reply( to original post)?$/i,
+  /^j[e'’ ]ai la même question/i,
+  /^i have the same question/i,
+  /^se désabonner$/i,
+  /^s[e'’ ]abonner$/i,
+  /^(un)?subscribe$/i,
+  // Compteurs et états affichés dans la carte de question
+  /^\d+\s*(vue|view)/i,
+  /^\d+\s*(recommandation|réponse|reponse|answer|repl)/i,
+  /^verrouillé/i,
+  /^locked/i,
+  /^cette question est partiellement verrouillée/i,
+  /^this question is partially locked/i,
+  // Avertissement de bas de carte
+  /^il se peut que les contenus de la communauté/i,
+  /^community content may not be verified/i,
+  /^en savoir plus$/i,
+  /^learn more$/i,
+  /^détails$/i,
+  /^details$/i,
+  // Niveaux d'expertise apparaissant entre parenthèses à côté du nom
+  /^\(expert produit[^)]*\)$/i,
+  /^\(product expert[^)]*\)$/i
+];
+
+// Cartes qui ne sont pas des messages : notifications système comportant elles aussi
+// un lien vers un profil, ce qui les fait passer pour des réponses.
+// Note : \b est fondé sur l'alphabet ASCII en JavaScript. Après « recommandé », le « é »
+// n'étant pas un caractère de mot, aucune limite de mot n'existe à cet endroit et un
+// motif terminé par \b n'y correspond jamais. Les mots accentués sont donc laissés nus.
+const CARTES_NON_MESSAGES = [
+  /^.{0,90}\ba recommandé/i,
+  /^.{0,90}\brecommended this\b/i,
+  /^.{0,90}\ba marqué.{0,40}réponse/i,
+  /^.{0,90}\bmarked this as\b/i,
+  /^.{0,90}\ba épinglé/i,
+  /^.{0,90}\bpinned this\b/i
+];
+
+/**
+ * Nettoie un nom d'auteur extrait du lien de profil.
+ *
+ * Les badges (« Auteur d'origine », niveau d'expertise) sont imbriqués dans le lien :
+ * leur texte remonte avec le nom et donnait des libellés du type
+ * « Ornella PASSAAuteur d'origine ».
+ *
+ * @param {string} brut Le texte du lien de profil
+ * @returns {string} Le nom seul
+ */
+function nettoyerNomAuteur(brut) {
+  const lignes = String(brut || '')
+    .replace(/\u00a0/g, ' ')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && !LIGNES_PARASITES.some((r) => r.test(l)));
+
+  return lignes.length ? lignes[0] : '';
+}
+
+// Mentions signalant qu'un fil est verrouillé, totalement ou en partie
+const MARQUEURS_VERROU = /verrouill[ée]|partially locked|this question is locked/i;
+
+/**
+ * Détecte l'état de verrouillage du fil.
+ *
+ * Un fil partiellement verrouillé n'accepte que les réponses des Product Experts et
+ * de l'auteur d'origine : c'est une information utile au suivi, et elle explique
+ * pourquoi personne d'autre n'intervient.
+ *
+ * @returns {boolean}
+ */
+function filVerrouille() {
+  const texte = (document.body && document.body.innerText) ? document.body.innerText : '';
+  return MARQUEURS_VERROU.test(texte);
+}
+
+/**
+ * Nettoie le texte d'une carte de message des éléments d'interface qui l'entourent.
+ * @param {string} texte Le texte brut de la carte
+ * @param {string} auteur Le nom de l'auteur, à retirer de l'en-tête
+ * @returns {string}
+ */
+function nettoyerCorpsMessage(texte, auteur) {
+  // Cette interface emploie des espaces insécables : sans normalisation, les motifs
+  // écrits avec une espace ordinaire ne reconnaissent pas « 2<nbsp>vues ».
+  return String(texte || '')
+    .replace(/\u00a0/g, ' ')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => {
+      if (!l) return false;
+      if (auteur && l === auteur) return false;
+      return !LIGNES_PARASITES.some((r) => r.test(l));
+    })
+    .join('\n')
+    .trim();
+}
+
+/**
+ * Repère les cartes de réponse à partir des liens vers les profils utilisateurs.
+ *
+ * Cette voie ne dépend d'aucun nom de classe : elle s'appuie sur la structure même
+ * de la page — chaque réponse porte un lien vers le profil de son auteur. Les classes
+ * `scTailwind*` sont générées et peuvent changer sans préavis.
+ *
+ * @returns {Array<{author: string, text: string, isOriginalPoster: boolean}>}
+ */
+function cartesParLienProfil() {
+  const SELECTEUR_PROFIL = 'a[href*="/community/user/"], a[href*="/profile/"], a[href*="/user/"]';
+  const liens = Array.from(document.querySelectorAll(SELECTEUR_PROFIL));
+  const cartes = [];
+  const dejaVues = [];
+
+  liens.forEach((lien) => {
+    const auteur = nettoyerNomAuteur(lien.innerText);
+    if (!auteur || auteur.length > 60) return;
+
+    let el = lien.parentElement;
+    let carte = null;
+
+    for (let niveau = 0; niveau < 8 && el; niveau++) {
+      // Un ancêtre contenant plusieurs liens de profil englobe plusieurs réponses :
+      // on ne monte pas plus haut sous peine de fusionner les messages.
+      if (el.querySelectorAll(SELECTEUR_PROFIL).length > 1) break;
+      if ((el.innerText || '').trim().length > 60) carte = el;
+      el = el.parentElement;
+    }
+
+    if (!carte || dejaVues.indexOf(carte) !== -1) return;
+    dejaVues.push(carte);
+
+    const brut = (carte.innerText || '').trim();
+    const corps = nettoyerCorpsMessage(brut, auteur);
+    if (corps.length < 10) return;
+
+    // Écarter les notifications système : elles portent un lien de profil sans
+    // constituer un message du fil.
+    if (CARTES_NON_MESSAGES.some((r) => r.test(corps))) return;
+
+    cartes.push({
+      author: auteur,
+      text: corps,
+      // Référence conservée pour retrouver les commandes propres à cette carte
+      element: carte,
+      // Badge posé par le forum sur les messages de la personne ayant posé la question
+      isOriginalPoster: /auteur d[e\u0027\u2019 ]origine|original poster/i.test(brut)
+    });
+  });
+
+  return cartes;
+}
+
 /**
  * Extrait le fil structuré : chaque message avec son auteur, dans l'ordre d'affichage.
  *
- * @returns {Array<{author: string, text: string}>}
+ * Deux voies, la plus robuste d'abord : la structure de la page (liens de profil),
+ * puis les noms de classes connus en secours.
+ *
+ * @returns {Array<{author: string, text: string, isOriginalPoster: boolean}>}
  */
 function extraireFilStructure() {
+  const parStructure = cartesParLienProfil();
+  if (parStructure.length) return parStructure;
+
   const selecteurs = [
     '.scTailwindThreadPostcontentroot',
     '.scTailwindThreadMessageroot',
@@ -528,7 +812,12 @@ function extraireFilStructure() {
     if (!noeuds.length) continue;
 
     const messages = noeuds
-      .map((n) => ({ author: auteurDuBloc(n), text: (n.innerText || '').trim() }))
+      .map((n) => ({
+        author: auteurDuBloc(n),
+        text: (n.innerText || '').trim(),
+        element: n,
+        isOriginalPoster: false
+      }))
       .filter((m) => m.text.length > 10);
 
     if (messages.length) return messages;
@@ -536,6 +825,129 @@ function extraireFilStructure() {
 
   return [];
 }
+
+/**
+ * Détermine l'auteur de la question à partir du badge « Auteur d'origine ».
+ *
+ * Bien plus fiable que de supposer qu'il s'agit du premier message : sous
+ * « Toutes les réponses », le premier message est celui du Product Expert,
+ * la question figurant dans un encart séparé au-dessus.
+ *
+ * @param {Array} messages Le fil structuré
+ * @returns {string} Le nom du demandeur, ou '' s'il n'est pas identifiable
+ */
+function trouverDemandeur(messages) {
+  const marque = (messages || []).filter((m) => m.isOriginalPoster);
+  if (marque.length) return marque[0].author;
+  return '';
+}
+
+/**
+ * Diagnostic à exécuter dans la console du navigateur pour vérifier l'extraction.
+ * Affiche ce qui a été reconnu, afin d'ajuster les sélecteurs si l'interface évolue.
+ */
+let diagnosticAffiche = false;
+let tentativesDiagnostic = 0;
+
+// La Community Console rend son contenu après coup : les premières inspections du DOM
+// tombent régulièrement à vide. Le constat n'est donc établi qu'après plusieurs essais.
+const MAX_TENTATIVES_DIAGNOSTIC = 12;
+
+// Passe à true dès que le fil a été lu, ou que le quota d'essais est épuisé.
+// Évite de relancer une extraction coûteuse à chaque mutation du DOM.
+let analyseTerminee = false;
+
+/**
+ * Affiche une fois par page le résultat de la lecture du fil.
+ *
+ * Un content script s'exécute dans un monde isolé : une fonction exposée sur `window`
+ * n'est pas appelable depuis la console, qui vise par défaut le contexte de la page.
+ * Le diagnostic doit donc s'afficher de lui-même.
+ */
+function diagnostiquerUneFois() {
+  if (diagnosticAffiche) return;
+  diagnosticAffiche = true;
+
+  const messages = extraireFilStructure();
+
+  if (!messages.length) {
+    tentativesDiagnostic++;
+
+    // Tant que le quota d'essais n'est pas épuisé, l'absence de contenu signifie
+    // simplement que la page n'a pas fini de se construire : rien à signaler.
+    if (tentativesDiagnostic < MAX_TENTATIVES_DIAGNOSTIC) return;
+
+    diagnosticAffiche = true;
+    analyseTerminee = true;
+    // console.log et non console.warn : un avertissement émis par un content script est
+    // consigné comme une erreur dans la page des extensions, ce qui alarme sans raison.
+    console.log(
+      "%c[PE Tracker] Aucun message lu après " + MAX_TENTATIVES_DIAGNOSTIC + " tentatives. " +
+      "Liens de profil trouvés : " + document.querySelectorAll('a[href*="/user/"], a[href*="/community/user/"], a[href*="/profile/"]').length +
+      " — si ce nombre est nul, les sélecteurs doivent être adaptés à cette interface.",
+      'color:#5f6368'
+    );
+    return;
+  }
+
+  analyseTerminee = true;
+
+  const demandeur = trouverDemandeur(messages);
+  console.log(
+    "%c[PE Tracker] " + messages.length + " message(s) lu(s) — demandeur : " +
+    (demandeur || 'non identifié') + (filVerrouille() ? ' — fil verrouillé' : ''),
+    'color:#0f9d58'
+  );
+  messages.forEach((m, i) => {
+    console.log(
+      "  " + (i + 1) + ". " + (m.author || '(auteur inconnu)') +
+      (m.isOriginalPoster ? ' [auteur d\'origine]' : '') +
+      ' — ' + m.text.slice(0, 60).replace(/\n/g, ' ') + '…'
+    );
+  });
+
+  // Expliciter la décision d'affichage du bouton de relance : sans cela, un bouton
+  // absent ou présent à tort ne peut être diagnostiqué que par tâtonnement.
+  getStorage(['peDisplayName']).then((config) => {
+    const nom = config.peDisplayName || '';
+
+    if (!nom) {
+      console.log("%c[PE Tracker] Nom d'affichage non renseigné : vos messages ne peuvent pas être distingués. À saisir dans les options de l'extension.", 'color:#f29900');
+      return;
+    }
+
+    const miens = messages.filter((m) => memeAuteur(m.author, nom));
+    const posterieurs = isolerRelanceStructuree(messages, nom, '').messages;
+    const affiche = doitAfficherRelance(messages, nom);
+
+    let raison;
+    if (!miens.length) raison = "vous n'êtes pas encore intervenu sur ce fil";
+    else if (!posterieurs.length) raison = 'votre message est le dernier du fil';
+    else raison = posterieurs.length + ' message(s) posté(s) depuis votre réponse';
+
+    console.log(
+      "%c[PE Tracker] Nom configuré : « " + nom + " » — " + miens.length + " message(s) à vous — " +
+      "bouton de relance " + (affiche ? 'affiché' : 'masqué') + " (" + raison + ")",
+      affiche ? 'color:#f29900' : 'color:#5f6368'
+    );
+  });
+}
+
+window.__peTrackerDiagnostic = function () {
+  const messages = extraireFilStructure();
+  console.log('%c=== Diagnostic PE Tracker ===', 'font-weight:bold');
+  console.log('Messages détectés :', messages.length);
+  messages.forEach((m, i) => {
+    console.log(
+      (i + 1) + '. ' + (m.author || '(auteur inconnu)') +
+      (m.isOriginalPoster ? '  [AUTEUR D\'ORIGINE]' : '') +
+      ' — ' + m.text.slice(0, 70).replace(/\n/g, ' ') + '…'
+    );
+  });
+  console.log('Demandeur identifié :', trouverDemandeur(messages) || '(aucun)');
+  console.log('Fil verrouillé :', filVerrouille() ? 'oui' : 'non');
+  return messages;
+};
 
 /**
  * Conserve la compatibilité avec les appels ne nécessitant que les textes.
@@ -635,13 +1047,71 @@ function formaterRelance(messages, demandeur) {
  * si la situation s'y prête, plutôt que de laisser une heuristique trancher à sa place.
  */
 function afficherBoutonRelance() {
+  if (document.getElementById('pe-followup-btn') || boutonRelanceEnCours) return;
+
+  const messages = extraireFilStructure();
+  if (messages.length < 2) return;
+
+  // La décision dépend du nom d'affichage, lu de façon asynchrone : un drapeau évite
+  // que l'observateur du DOM ne déclenche deux créations pendant cette attente.
+  boutonRelanceEnCours = true;
+
+  getStorage(['peDisplayName']).then((config) => {
+    if (!doitAfficherRelance(messages, config.peDisplayName)) {
+      boutonRelanceEnCours = false;
+      return;
+    }
+    const premiere = !!config.peDisplayName &&
+      !messages.some((m) => memeAuteur(m.author, config.peDisplayName));
+    creerBoutonRelance(premiere);
+    boutonRelanceEnCours = false;
+  });
+}
+
+let boutonRelanceEnCours = false;
+
+/**
+ * Détermine s'il y a réellement une relance à traiter sur ce fil.
+ *
+ * Trois situations ne le justifient pas : une question sans aucune réponse, un fil où
+ * le Product Expert n'est pas encore intervenu, et un fil où sa réponse est le dernier
+ * message. Afficher le bouton dans ces cas n'apporte rien et brouille la lecture.
+ *
+ * @param {Array} messages Le fil structuré
+ * @param {string} nomPe Nom d'affichage du Product Expert
+ * @returns {boolean}
+ */
+function doitAfficherRelance(messages, nomPe) {
+  // Une seule carte : la question, sans échange
+  if (!messages || messages.length < 2) return false;
+
+  // Sans nom d'affichage, l'appartenance des messages est indéterminable :
+  // le bouton reste proposé, et le clic explique ce qui manque.
+  if (!nomPe) return true;
+
+  const estIntervenu = messages.some((m) => memeAuteur(m.author, nomPe));
+
+  // Fil auquel un autre bénévole a répondu sans que le Product Expert soit intervenu :
+  // il peut légitimement compléter, à condition de ne rien répéter. Une réponse
+  // initiale générée à l'aveugle reproduirait justement le message du collègue.
+  if (!estIntervenu) return messages.length >= 2;
+
+  return isolerRelanceStructuree(messages, nomPe, '').messages.length > 0;
+}
+
+/**
+ * Crée et pose le bouton de traitement d'une relance.
+ */
+function creerBoutonRelance(premiereIntervention) {
   if (document.getElementById('pe-followup-btn')) return;
-  if (extraireMessagesDuFil().length < 2) return;
 
   const btn = document.createElement('button');
   btn.id = 'pe-followup-btn';
-  btn.innerHTML = '💬 Répondre à la relance';
-  btn.title = "Générer une réponse au dernier message, sans répéter ce qui a déjà été dit";
+  btn.innerHTML = premiereIntervention ? '💬 Compléter le fil' : '💬 Répondre à la relance';
+  btn.title = premiereIntervention
+    ? "Intervenir sur ce fil sans répéter la réponse déjà publiée par un autre bénévole"
+    : "Générer une réponse au dernier message, sans répéter ce qui a déjà été dit";
+  const libelleInitial = btn.innerHTML;
 
   btn.addEventListener('click', async () => {
     const config = await getStorage(['webappUrl', 'sharedSecret', 'peDisplayName']);
@@ -651,8 +1121,8 @@ function afficherBoutonRelance() {
     }
 
     const messages = extraireFilStructure();
-    if (messages.length < 2) {
-      alert("Ce fil ne contient pas encore de message postérieur à votre réponse.");
+    if (!messages.length) {
+      alert("Aucune réponse n'a pu être lue dans ce fil.\n\nOuvrez la console du navigateur (F12) et exécutez __peTrackerDiagnostic() pour voir ce qui est détecté.");
       return;
     }
 
@@ -681,7 +1151,9 @@ function afficherBoutonRelance() {
       if (!suite) return;
     }
 
-    const relance = formaterRelance(isolation.messages, config.askerName || '');
+    // Le badge « Auteur d'origine » désigne le demandeur ; à défaut, le premier message
+    const demandeur = trouverDemandeur(messages) || (messages[0] ? messages[0].author : '');
+    const relance = formaterRelance(isolation.messages, demandeur);
     console.log("💬 Relance isolée par « " + isolation.methode + " » — " + isolation.messages.length + " message(s).");
 
     btn.disabled = true;
@@ -695,15 +1167,61 @@ function afficherBoutonRelance() {
           action: 'followUp',
           url: window.location.href,
           followUpText: relance.substring(0, MAX_CONTENT),
+          locked: filVerrouille(),
+          peADejaRepondu: !premiereIntervention,
           secret: config.sharedSecret
         }
       });
 
-      const data = (response && response.success) ? response.data : null;
+      let data = (response && response.success) ? response.data : null;
+
+      // Fil pas encore suivi : on l'enregistre sans générer de réponse initiale
+      // (inutile ici, et coûteuse en quota), puis on relance le traitement.
+      if (data && data.code === 'untracked') {
+        btn.innerHTML = '⏳ Enregistrement du fil...';
+
+        const infos = extraireInfosThread();
+        const inscription = await sendMessage({
+          action: 'sendToWebapp',
+          webappUrl: config.webappUrl,
+          payload: {
+            action: 'registerOnly',
+            url: window.location.href,
+            title: infos.title,
+            author: demandeur || infos.author,
+            product: infos.product,
+            content: messages[0] ? messages[0].text.substring(0, MAX_CONTENT) : infos.content,
+            secret: config.sharedSecret
+          }
+        });
+
+        const okInscription = inscription && inscription.success && inscription.data && inscription.data.status === 'success';
+        if (!okInscription) {
+          alert("Impossible d'enregistrer ce fil : " + ((inscription && inscription.data) ? inscription.data.message : 'erreur inconnue'));
+          btn.innerHTML = libelleInitial;
+          btn.disabled = false;
+          return;
+        }
+
+        btn.innerHTML = '⏳ Analyse de la relance...';
+        const seconde = await sendMessage({
+          action: 'sendToWebapp',
+          webappUrl: config.webappUrl,
+          payload: {
+            action: 'followUp',
+            url: window.location.href,
+            followUpText: relance.substring(0, MAX_CONTENT),
+            locked: filVerrouille(),
+            peADejaRepondu: !premiereIntervention,
+            secret: config.sharedSecret
+          }
+        });
+        data = (seconde && seconde.success) ? seconde.data : null;
+      }
 
       if (!data || data.status !== 'success') {
         alert("Échec : " + (data ? data.message : "réponse invalide du backend"));
-        btn.innerHTML = '💬 Répondre à la relance';
+        btn.innerHTML = libelleInitial;
         btn.disabled = false;
         return;
       }
@@ -721,9 +1239,18 @@ function afficherBoutonRelance() {
         alert("❌ Réponse incomplète : ne publiez pas ce texte tel quel.");
       }
 
+      if (data.nothingToAdd) {
+        alert("ℹ️ Rien à ajouter\n\nLa réponse déjà publiée traite correctement la demande. Aucun texte n'a été inséré : un message redondant encombrerait le fil.\n\nConstat de l'analyse :\n" + (data.summary || ''));
+        btn.innerHTML = 'ℹ️ Rien à ajouter';
+        setTimeout(() => { btn.innerHTML = libelleInitial; btn.disabled = false; }, 4000);
+        return;
+      }
+
       const texte = data.summary || '';
       if (texte && !data.truncated) {
-        const place = await injecterReponse(texte);
+        // On commente sous le dernier message du fil, c'est-à-dire celui du demandeur
+        const dernier = isolation.messages[isolation.messages.length - 1];
+        const place = await injecterReponse(texte, 'commentaire', dernier ? dernier.element : null);
         if (!place) {
           try { await navigator.clipboard.writeText(texte); } catch (e) { /* presse-papier indisponible */ }
         }
@@ -738,7 +1265,7 @@ function afficherBoutonRelance() {
     }
 
     setTimeout(() => {
-      btn.innerHTML = '💬 Répondre à la relance';
+      btn.innerHTML = libelleInitial;
       btn.disabled = false;
     }, 4000);
   });
@@ -747,13 +1274,9 @@ function afficherBoutonRelance() {
 }
 
 /**
- * Fonction principale : extraire les données et injecter le bouton
+ * Crée le bouton principal s'il n'est pas déjà présent.
  */
-function initTracker() {
-  if (!window.location.pathname.includes('/thread/')) {
-    return;
-  }
-  
+function creerBoutonPrincipal() {
   if (document.getElementById('pe-tracker-btn')) {
     return;
   }
@@ -947,6 +1470,29 @@ function initTracker() {
   document.body.appendChild(btn);
 }
 
+/**
+ * Point d'entrée, appelé au chargement puis à chaque mutation du DOM.
+ *
+ * La création du bouton principal est distincte de l'analyse du fil : la première
+ * n'a lieu qu'une fois, la seconde doit pouvoir se répéter tant que la Community
+ * Console n'a pas fini de construire sa page. Les réunir sous une même garde
+ * empêchait toute réévaluation dès le bouton posé.
+ */
+function initTracker() {
+  if (!window.location.pathname.includes('/thread/')) {
+    return;
+  }
+
+  creerBoutonPrincipal();
+
+  // L'analyse s'arrête d'elle-même une fois le fil lu, ou le quota d'essais épuisé :
+  // elle lit beaucoup de `innerText`, ce qui force un recalcul de mise en page.
+  if (analyseTerminee) return;
+
+  afficherBoutonRelance();
+  diagnostiquerUneFois();
+}
+
 // Observation DOM pour la gestion SPA.
 // Throttle et non debounce : sur une page qui mute en continu (horodatages relatifs,
 // indicateurs de présence), un debounce se réarme indéfiniment et le bouton n'apparaît jamais.
@@ -963,3 +1509,8 @@ observer.observe(document.body, { childList: true, subtree: true });
 
 // Lancement initial
 setTimeout(initTracker, 1500);
+
+// Le rendu de la Community Console peut s'achever bien après le chargement, sans
+// qu'aucune mutation ne relance l'observateur. Ces reprises différées couvrent ce cas.
+setTimeout(initTracker, 4000);
+setTimeout(initTracker, 9000);

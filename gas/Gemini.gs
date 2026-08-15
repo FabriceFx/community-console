@@ -597,8 +597,20 @@ function sembleTronque_(text) {
  *
  * @returns {string} L'instruction système complète
  */
-function buildFollowUpInstruction_() {
-  return `Tu rédiges à la place d'un Product Expert bénévole des forums d'aide Google. Il a déjà répondu à cette personne, qui vient de lui écrire de nouveau. Tu rédiges sa réponse à cette relance.
+function buildFollowUpInstruction_(peADejaRepondu) {
+  const cadrage = (peADejaRepondu === false)
+    ? `Tu rédiges à la place d'un Product Expert bénévole des forums d'aide Google. Il n'a PAS encore écrit sur ce fil : un autre bénévole y a déjà répondu. Tu rédiges sa première intervention.
+
+RAISON D'INTERVENIR — LA QUESTION PRÉALABLE
+Ta seule justification est d'apporter ce que la réponse existante ne contient pas :
+- un point factuel erroné à corriger ;
+- un élément déterminant qui manque et qui débloque la personne ;
+- une reformulation d'une étape qu'elle dit ne pas comprendre.
+Si la réponse déjà publiée est correcte et complète, réponds STATUT: RIEN_A_AJOUTER et écris une seule phrase l'expliquant. Un message redondant encombre le fil, dessert la personne et discrédite celui qui l'écrit. Ne rien ajouter est un résultat valable, souvent le meilleur.
+Ne commente jamais le travail de l'autre bénévole et ne le contredis pas frontalement : corrige le point factuel, sans le mettre en cause.`
+    : `Tu rédiges à la place d'un Product Expert bénévole des forums d'aide Google. Il a déjà répondu à cette personne, qui vient de lui écrire de nouveau. Tu rédiges sa réponse à cette relance.`;
+
+  return cadrage + `
 
 RÈGLE ABSOLUE N°1 — NE JAMAIS REDIRE CE QUI A DÉJÀ ÉTÉ DIT
 La personne a lu la réponse précédente. Reproduire la même procédure, même reformulée, est le pire résultat possible : elle vient d'expliquer que cela n'a pas fonctionné ou n'était pas clair. Si tu dois t'appuyer sur un point déjà traité, renvoie-y en une demi-phrase (« comme indiqué plus haut ») sans le redévelopper.
@@ -619,7 +631,7 @@ Chaque message transmis est précédé de son auteur et de son rôle. Traite-les
 FORMAT DE SORTIE OBLIGATOIRE
 Commence par ces trois lignes, puis une ligne contenant uniquement ---, puis le message :
 LANG: <code de la langue employée par la personne : fr, en, de, es, it...>
-SUITE: <RESOLU | ECHEC | INCOMPRIS | NOUVEAU | HORS_SUJET>
+SUITE: <RESOLU | ECHEC | INCOMPRIS | NOUVEAU | HORS_SUJET | RIEN_A_AJOUTER>
 CONFIANCE: <HAUTE | MOYENNE | FAIBLE>
 ---
 
@@ -643,6 +655,9 @@ Signale en une demi-phrase que cet élément modifie l'analyse, puis traite la s
 HORS_SUJET — la relance porte sur un tout autre sujet.
 Indique brièvement que cela relève d'une autre question, et suggère d'ouvrir un nouveau fil.
 
+RIEN_A_AJOUTER — la réponse déjà publiée traite correctement et complètement la demande.
+N'écris qu'une phrase indiquant qu'il n'y a rien à compléter. Ce message ne sera pas publié : il sert seulement à te faire constater qu'aucune intervention n'est utile.
+
 STYLE
 - N'écris ni salutation d'ouverture ni signature : elles sont gérées automatiquement. Un message de relance ne recommence pas par une formule de bienvenue.
 - 120 mots maximum. 40 mots maximum en cas RESOLU.
@@ -661,7 +676,7 @@ function parseFollowUpEnvelope_(raw) {
   const result = { lang: '', suite: 'NOUVEAU', confidence: 'MOYENNE', body: text };
 
   const langMatch = text.match(/^[ \t]*LANG[ \t]*:[ \t]*([A-Za-z\-]{2,5})[ \t]*$/mi);
-  const suiteMatch = text.match(/^[ \t]*SUITE[ \t]*:[ \t]*(RESOLU|ECHEC|INCOMPRIS|NOUVEAU|HORS_SUJET)[ \t]*$/mi);
+  const suiteMatch = text.match(/^[ \t]*SUITE[ \t]*:[ \t]*(RESOLU|ECHEC|INCOMPRIS|NOUVEAU|HORS_SUJET|RIEN_A_AJOUTER)[ \t]*$/mi);
   const confidenceMatch = text.match(/^[ \t]*CONFIANCE[ \t]*:[ \t]*(HAUTE|MOYENNE|FAIBLE)[ \t]*$/mi);
 
   if (langMatch) result.lang = langMatch[1].toLowerCase();
@@ -1408,6 +1423,7 @@ function formatMarkdownToRichText(text) {
  * @param {string} contexte.followUp Le ou les messages postés depuis cette réponse
  * @param {string} contexte.author Prénom affiché de la personne
  * @param {string} contexte.product Produit Google concerné
+ * @param {boolean} [contexte.peADejaRepondu] false si le Product Expert n'a pas encore écrit sur ce fil
  * @returns {{ok: boolean, suite: string, confidence: string, lang: string, text: string, repeatsPrevious: boolean, truncated: boolean}}
  */
 function generateFollowUp(contexte) {
@@ -1438,7 +1454,9 @@ QUESTION D'ORIGINE :
 ${sanitizePii(String(contexte.question || '').trim()) || '(non disponible)'}
 """
 
-RÉPONSE DÉJÀ PUBLIÉE PAR LE PRODUCT EXPERT — à ne surtout pas reformuler :
+${contexte.peADejaRepondu === false
+    ? "RÉPONSE DÉJÀ PUBLIÉE PAR UN AUTRE BÉNÉVOLE — figure dans le fil ci-dessous ; n'en reproduis rien :"
+    : "RÉPONSE DÉJÀ PUBLIÉE PAR LE PRODUCT EXPERT — à ne surtout pas reformuler :"}
 """
 ${previousAnswer || '(non disponible : appuie-toi sur le fil ci-dessous pour déduire ce qui a déjà été dit)'}
 """
@@ -1454,7 +1472,7 @@ ${followUp}
     "headers": { "x-goog-api-key": apiKey },
     "muteHttpExceptions": true,
     "payload": JSON.stringify({
-      "systemInstruction": { "parts": [{ "text": buildFollowUpInstruction_() }] },
+      "systemInstruction": { "parts": [{ "text": buildFollowUpInstruction_(contexte.peADejaRepondu !== false) }] },
       "contents": [{ "role": "user", "parts": [{ "text": userTurn }] }],
       "tools": [{ "googleSearch": {} }],
       "generationConfig": { "temperature": 0.85, "topP": 0.95, "maxOutputTokens": maxTokens }
@@ -1527,7 +1545,7 @@ ${followUp}
       repeatsPrevious: redite,
       overlap: Math.round(recouvrement * 100),
       truncated: tronque,
-      text: buildFollowUpResponse(lang, localise, envelope.suite)
+      text: envelope.suite === 'RIEN_A_AJOUTER' ? localise : buildFollowUpResponse(lang, localise, envelope.suite)
     };
 
   } catch (e) {

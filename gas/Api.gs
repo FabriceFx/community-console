@@ -48,6 +48,12 @@ function doPost(e) {
       return handleFollowUp_(data);
     }
 
+    // 4. Enregistrement seul, sans appel à Gemini : sert à inscrire un fil déjà
+    //    répondu, pour lequel générer une réponse initiale n'aurait aucun sens.
+    if (data.action === 'registerOnly') {
+      return registerThreadOnly_(data);
+    }
+
     const title = data.title || "Titre inconnu";
     const url = data.url || "";
     const author = data.author || "Auteur inconnu";
@@ -83,6 +89,30 @@ function doPost(e) {
 
     try {
       const sheet = getTrackingSheet_();
+
+      // Un fil déjà suivi est mis à jour plutôt que dupliqué : sans cela, chaque clic
+      // sur « Suivre dans Sheets » créait une ligne supplémentaire pour le même thread.
+      const existante = trouverLigneParUrl_(sheet, url);
+      if (existante !== -1) {
+        if (summary) {
+          sheet.getRange(existante, CONFIG.COL.SUMMARY).setRichTextValue(formatMarkdownToRichText(summary));
+        }
+        sheet.getRange(existante, CONFIG.COL.NOTES).setValue(buildNote_("Analyse relancée depuis l'extension", reply));
+
+        return jsonOutput_({
+          status: "success",
+          message: "Thread déjà suivi : la proposition a été mise à jour.",
+          id: sheet.getRange(existante, CONFIG.COL.ID).getValue(),
+          row: existante,
+          duplicate: true,
+          summary: summary,
+          replyStatus: reply.status,
+          confidence: reply.confidence,
+          uiPathUnsourced: !!reply.uiPathUnsourced,
+          truncated: !!reply.truncated,
+          lang: reply.lang
+        });
+      }
 
       sheet.appendRow([
         newId,
@@ -196,20 +226,7 @@ function recordPublishedReply_(threadUrl, publishedText) {
 
   try {
     const sheet = getTrackingSheet_();
-    const lastRow = sheet.getLastRow();
-    if (lastRow < 2) {
-      return jsonOutput_({ status: "error", message: "Aucune ligne de suivi." });
-    }
-
-    // Rechercher la ligne du thread en partant de la fin (le thread courant est récent)
-    const urls = sheet.getRange(2, CONFIG.COL.URL, lastRow - 1, 1).getValues();
-    let targetRow = -1;
-    for (let i = urls.length - 1; i >= 0; i--) {
-      if (String(urls[i][0] || '').trim() === url) {
-        targetRow = i + 2;
-        break;
-      }
-    }
+    const targetRow = trouverLigneParUrl_(sheet, url);
 
     if (targetRow === -1) {
       return jsonOutput_({ status: "error", message: "Thread introuvable dans la feuille de suivi." });
@@ -253,6 +270,77 @@ function recordPublishedReply_(threadUrl, publishedText) {
       modified: true,
       editRatio: percent
     });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Retrouve la ligne d'un thread par son URL, en partant de la fin.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet La feuille de suivi
+ * @param {string} url L'URL recherchée
+ * @returns {number} Le numéro de ligne, ou -1 si le thread n'est pas suivi
+ */
+function trouverLigneParUrl_(sheet, url) {
+  const cible = String(url || '').trim();
+  if (!cible) return -1;
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return -1;
+
+  const urls = sheet.getRange(2, CONFIG.COL.URL, lastRow - 1, 1).getValues();
+  for (let i = urls.length - 1; i >= 0; i--) {
+    if (String(urls[i][0] || '').trim() === cible) return i + 2;
+  }
+  return -1;
+}
+
+/**
+ * Inscrit un fil dans la feuille sans générer de réponse.
+ *
+ * Utile lorsqu'une relance arrive sur un fil jamais suivi : produire une réponse
+ * initiale y serait inutile — le Product Expert a déjà répondu — et consommerait
+ * du quota pour rien. Si le fil est déjà présent, rien n'est dupliqué.
+ *
+ * @param {Object} data La charge utile (url, title, author, product, content)
+ * @returns {GoogleAppsScript.Content.TextOutput}
+ */
+function registerThreadOnly_(data) {
+  const url = String(data.url || '').trim();
+  if (!url) {
+    return jsonOutput_({ status: "error", message: "URL du thread manquante." });
+  }
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) {
+    return jsonOutput_({ status: "error", code: "busy", message: "Serveur occupé, réessayez." });
+  }
+
+  try {
+    const sheet = getTrackingSheet_();
+    const existante = trouverLigneParUrl_(sheet, url);
+
+    if (existante !== -1) {
+      return jsonOutput_({ status: "success", message: "Thread déjà suivi.", row: existante, created: false });
+    }
+
+    const newId = Utilities.getUuid().substring(0, 8);
+    sheet.appendRow([
+      newId,
+      new Date(),
+      url,
+      data.product || "Inconnu",
+      data.title || "Titre inconnu",
+      data.content || "",
+      data.author || "Auteur inconnu",
+      "En attente (User)",
+      "",
+      "",
+      "Enregistré lors d'une relance (réponse initiale déjà publiée hors outil)",
+      ""
+    ]);
+
+    return jsonOutput_({ status: "success", message: "Thread enregistré.", id: newId, row: sheet.getLastRow(), created: true });
   } finally {
     lock.releaseLock();
   }
@@ -330,25 +418,14 @@ function handleFollowUp_(data) {
   }
 
   const sheet = getTrackingSheet_();
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) {
-    return jsonOutput_({ status: "error", message: "Aucune ligne de suivi." });
-  }
-
-  // Retrouver le fil en partant de la fin : la ligne concernée est la plus récente
-  const urls = sheet.getRange(2, CONFIG.COL.URL, lastRow - 1, 1).getValues();
-  let targetRow = -1;
-  for (let i = urls.length - 1; i >= 0; i--) {
-    if (String(urls[i][0] || '').trim() === url) {
-      targetRow = i + 2;
-      break;
-    }
-  }
+  const targetRow = trouverLigneParUrl_(sheet, url);
 
   if (targetRow === -1) {
+    // L'extension enchaîne automatiquement sur un enregistrement léger puis réessaie
     return jsonOutput_({
       status: "error",
-      message: "Ce thread n'est pas encore suivi. Cliquez d'abord sur « 📌 Suivre dans Sheets »."
+      code: "untracked",
+      message: "Ce thread n'est pas encore suivi."
     });
   }
 
@@ -363,7 +440,10 @@ function handleFollowUp_(data) {
     previousAnswer: previousAnswer,
     followUp: followUpText,
     author: idx(CONFIG.COL.AUTHOR),
-    product: idx(CONFIG.COL.PRODUCT)
+    product: idx(CONFIG.COL.PRODUCT),
+    // Détermine le cadrage : réponse à une relance, ou première intervention
+    // sur un fil auquel un autre bénévole a déjà répondu.
+    peADejaRepondu: data.peADejaRepondu !== false
   });
 
   const lock = LockService.getScriptLock();
@@ -383,7 +463,7 @@ function handleFollowUp_(data) {
     sheet.getRange(targetRow, CONFIG.COL.STATUS).setValue(
       reply.suite === 'RESOLU' ? "Résolue" : "En attente (User)"
     );
-    sheet.getRange(targetRow, CONFIG.COL.NOTES).setValue(buildFollowUpNote_(reply));
+    sheet.getRange(targetRow, CONFIG.COL.NOTES).setValue(buildFollowUpNote_(reply, data.locked));
   } finally {
     lock.releaseLock();
   }
@@ -394,6 +474,7 @@ function handleFollowUp_(data) {
     summary: reply.text || "",
     suite: reply.suite,
     confidence: reply.confidence,
+    nothingToAdd: reply.suite === 'RIEN_A_AJOUTER',
     repeatsPrevious: !!reply.repeatsPrevious,
     overlap: reply.overlap || 0,
     truncated: !!reply.truncated,
@@ -404,15 +485,17 @@ function handleFollowUp_(data) {
 /**
  * Compose la note de suivi d'une relance.
  * @param {Object} reply L'objet renvoyé par generateFollowUp
+ * @param {boolean} [locked] true si le fil est verrouillé, totalement ou en partie
  * @returns {string} La note à inscrire
  */
-function buildFollowUpNote_(reply) {
+function buildFollowUpNote_(reply, locked) {
   const labels = {
     RESOLU: "✅ résolu — remerciement",
     ECHEC: "⚠️ la solution n'a pas fonctionné",
     INCOMPRIS: "point incompris à reformuler",
     NOUVEAU: "élément nouveau au dossier",
     HORS_SUJET: "⚠️ relance hors sujet",
+    RIEN_A_AJOUTER: "rien à ajouter à la réponse existante",
     ERREUR: "❌ échec de génération"
   };
 
@@ -426,6 +509,9 @@ function buildFollowUpNote_(reply) {
   }
   if (reply.confidence && reply.suite !== 'RESOLU') {
     parts.push("confiance " + String(reply.confidence).toLowerCase());
+  }
+  if (locked) {
+    parts.push("🔒 fil verrouillé — seuls les Experts Produit et l'auteur peuvent répondre");
   }
 
   return parts.join(" • ");

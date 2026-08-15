@@ -2,6 +2,147 @@
 
 Toutes les modifications notables apportées à ce projet sont documentées dans ce fichier.
 
+## [1.12.2] - 2026-08-15
+
+### 🚪 L'Analyse du Fil Était Inatteignable dès le Bouton Posé
+
+> **Après rafraîchissement d'une page, la console n'affichait plus aucune ligne de diagnostic.**
+> `initTracker` sortait sur `if (document.getElementById('pe-tracker-btn')) return;` — une garde placée **avant** l'analyse. Au premier passage, la page n'étant pas encore construite, le bouton était créé et l'analyse ne trouvait rien. À tous les passages suivants, la fonction sortait avant de l'atteindre. Les douze tentatives de reprise introduites en 1.12.1 ne pouvaient jamais s'exécuter.
+
+- **Création et analyse séparées (`creerBoutonPrincipal`, `initTracker`)** : Le bouton principal n'est créé qu'une fois ; l'analyse du fil se répète tant que la Community Console n'a pas fini de construire sa page.
+- **Arrêt explicite de l'analyse (`analyseTerminee`)** : Une fois le fil lu — ou le quota d'essais épuisé — l'extraction cesse d'être relancée à chaque mutation du DOM. Elle lit beaucoup d'`innerText`, ce qui force un recalcul de mise en page à chaque appel.
+- **Espaces insécables** : L'interface emploie des espaces insécables (`10&nbsp;caractères`, visible dans les attributs `aria-label`). Les motifs écrits avec une espace ordinaire ne reconnaissaient donc pas « 2&nbsp;vues », et le compteur restait dans le texte transmis au modèle. Normalisation ajoutée avant tout filtrage.
+- **Compteurs et horodatages plus tolérants** : « 2 vues 1 réponse » sur une même ligne, et les durées en anglais, sont désormais reconnus. Un nombre ouvrant une phrase utile — « 2 fichiers ne se synchronisent plus » — reste préservé.
+- **Couverture de test** : Vérification qu'aucune garde ne précède l'analyse dans `initTracker`, et que les deux voies de clôture de l'analyse existent.
+
+## [1.12.1] - 2026-08-15
+
+### 🧽 Notifications Prises pour des Messages, et Diagnostic Prématuré
+
+> **Deux cas réels remontés depuis la console.**
+> Sur un fil « Fiche d'établissement Google », le diagnostic annonçait `demandeur : Ornella PASSAAuteur d'origine` et comptait deux messages de « JEROME G-GH » dont le contenu était « … a recommandé ceci ». Sur un autre fil, il déclarait `Liens de profil trouvés : 0` alors que l'interface était identique à celle qui fonctionnait.
+
+- **Nom d'auteur nettoyé (`nettoyerNomAuteur`)** : Les badges — « Auteur d'origine », niveau d'expertise — sont imbriqués **dans** le lien de profil, et leur texte remontait avec le nom. Seule la première ligne significative est désormais retenue.
+- **Notifications système écartées (`CARTES_NON_MESSAGES`)** : « X a recommandé ceci », « a épinglé », « a marqué cette réponse » comportent elles aussi un lien de profil et passaient pour des réponses. Une vraie réponse employant le mot « recommande » reste conservée, le motif étant ancré en tête de message.
+- **Limites de mots et accents** : Les motifs terminés par `\b` après un caractère accenté ne correspondaient jamais — `\b` est fondé sur l'alphabet ASCII en JavaScript, et « é » n'y est pas un caractère de mot. Le test l'a révélé immédiatement.
+- **Diagnostic tolérant au rendu différé** : La Community Console construit son contenu après le chargement ; une inspection trop précoce trouvait un DOM vide et ce constat était figé définitivement. Douze tentatives sont désormais admises, complétées par des reprises à 4 et 9 secondes lorsque aucune mutation ne survient.
+- **Les informations ne sont plus consignées comme des erreurs** : Un `console.warn` émis par un content script apparaît dans la page d'erreurs de l'extension. Les messages purement informatifs — constat de lecture, nom d'affichage manquant, repli technique de `execCommand` — passent en `console.log`.
+- **Couverture de test (`tests/18-notifications-parasites.test.js`)** : 20 cas reproduisant le DOM observé, dont le badge imbriqué et la distinction entre notification et réponse.
+
+## [1.12.0] - 2026-08-15
+
+### 🤝 Intervenir sur un Fil Déjà Répondu par un Autre Bénévole
+
+> **Un autre Product Expert a répondu, vous pas encore.**
+> Le bouton de relance était masqué, et « Suivre dans Sheets » aurait généré une réponse initiale ignorant complètement le message du collègue — avec un risque maximal de le répéter mot pour mot. C'est précisément le reproche qui avait été opposé publiquement à une réponse de l'outil.
+
+- **Bouton « 💬 Compléter le fil »** : S'affiche lorsqu'un autre bénévole a répondu sans que le Product Expert soit intervenu. Le libellé distingue ce cas de la relance classique.
+- **Cadrage dédié (`buildFollowUpInstruction_(peADejaRepondu)`)** : L'instruction système exige une justification d'intervenir — un point factuel erroné à corriger, un élément déterminant qui manque, une étape à reformuler — et interdit de commenter le travail du collègue ou de le contredire frontalement.
+- **Nouveau statut `RIEN_A_AJOUTER`** : Si la réponse déjà publiée est correcte et complète, le modèle le déclare et aucun texte n'est inséré. La consigne l'énonce explicitement : « ne rien ajouter est un résultat valable, souvent le meilleur ». Un message redondant encombre le fil, dessert la personne et discrédite celui qui l'écrit.
+- **Sortie avant toute injection** : Le verdict « rien à ajouter » interrompt le parcours en amont de l'insertion, et le constat de l'analyse est affiché pour information.
+- **Libellé de bouton restauré depuis une variable** : Les remises à l'état initial codaient le texte en dur et auraient écrasé le libellé contextuel.
+- **Couverture de test (`tests/17-autre-pe.test.js`)** : 17 cas sur les deux cadrages et le nouveau statut.
+
+## [1.11.3] - 2026-08-15
+
+### 🔎 Le Diagnostic Explique la Décision d'Affichage
+
+> **Un bouton absent, ou présent à tort, ne se diagnostiquait que par tâtonnement.**
+> La console indiquait ce qui avait été lu du fil, jamais ce qui en avait été déduit.
+
+- **Décision explicitée (`diagnostiquerUneFois`)** : Le diagnostic affiche désormais le nom d'affichage effectivement lu dans le stockage, le nombre de messages reconnus comme ceux du Product Expert, l'état du bouton de relance et la raison qui le motive — « vous n'êtes pas encore intervenu », « votre message est le dernier du fil », ou le nombre de messages postés depuis.
+- **Nom manquant signalé distinctement** : Un avertissement dédié remplace le silence lorsque le nom d'affichage n'est pas renseigné.
+- **Couverture de test** : Vérification que chacune des raisons est bien présente dans le code du diagnostic.
+
+## [1.11.2] - 2026-08-15
+
+### 🙈 Le Bouton de Relance ne S'affiche que S'il y a une Relance
+
+> **Le bouton apparaissait sur des fils sans le moindre message à traiter.**
+> Sa condition d'affichage se réduisait à « au moins une carte détectée ». Or la carte de question en est une : le bouton s'affichait donc sur une question sans aucune réponse, et sur un fil où le Product Expert venait de répondre sans que personne n'ait réagi.
+
+- **Condition explicite (`doitAfficherRelance`)** : Le bouton n'apparaît que si le Product Expert est déjà intervenu **et** qu'au moins un message a été posté depuis. Trois situations le masquent désormais : question sans réponse, Product Expert non encore intervenu, et fil dont il signe le dernier message.
+- **Lecture asynchrone maîtrisée** : La décision dépend du nom d'affichage, lu dans le stockage de l'extension. Un drapeau empêche l'observateur du DOM de déclencher deux créations pendant cette lecture.
+- **Sans nom d'affichage configuré** : Le bouton reste proposé dès qu'un échange existe — l'appartenance des messages étant alors indéterminable — mais plus jamais sur une question seule. Le clic explique ce qui manque.
+- **Séparation des responsabilités** : `afficherBoutonRelance` décide, `creerBoutonRelance` construit.
+- **Couverture de test (`tests/16-affichage-relance.test.js`)** : 16 cas, dont les quatre situations qui ne justifient pas le bouton.
+
+## [1.11.1] - 2026-08-15
+
+### 🎯 Le Commentaire se Place sous le Message du Demandeur
+
+> **La commande à actionner est celle qui suit le message du demandeur, pas celle de la réponse du Product Expert.**
+> La 1.11.0 privilégiait la commande située dans la carte du Product Expert, plus haut dans le fil : le commentaire se serait inséré au mauvais endroit de l'échange.
+
+- **Sélection par position dans le document (`trouverBoutonCommenter`)** : La commande retenue est la première qui suit le message visé, déterminée par `compareDocumentPosition`. Le repérage ne dépend donc ni des noms de classes ni de la profondeur d'imbrication des cartes.
+- **Message de référence explicite** : Le dernier message isolé de la relance — celui du demandeur — est transmis à l'insertion, en lieu et place du nom d'affichage du Product Expert.
+- **Repli inchangé** : En l'absence de correspondance, la commande la plus récente de la page est utilisée.
+
+## [1.11.0] - 2026-08-15
+
+### 💬 Une Relance se Commente, elle ne se Republie pas
+
+> **« Répondre » ouvre une nouvelle réponse au fil : c'est la commande de la première intervention.**
+> Une relance se traite en commentant sous sa propre réponse, là où la personne a elle-même écrit. Employer « Répondre » créait une seconde réponse indépendante au lieu de poursuivre l'échange.
+
+- **Recherche dédiée (`trouverBoutonCommenter`)** : Repère la commande « Ajouter un commentaire » / « Add a comment », en **priorisant celle située dans la carte du Product Expert** — c'est sous sa réponse que la discussion se poursuit. À défaut, la commande la plus récente de la page.
+- **Aiguillage de l'insertion (`injecterReponse(text, mode, nomPe)`)** : Mode `reponse` pour une première intervention, `commentaire` pour une relance. La première réponse conserve le comportement d'origine.
+- **Aucun éditeur préexistant réutilisé en mode commentaire** : Un éditeur déjà ouvert serait celui d'une nouvelle réponse, au mauvais endroit du fil. La commande visée est donc systématiquement actionnée.
+- **Échec explicite** : Si la commande de commentaire est introuvable, le texte est copié dans le presse-papier plutôt qu'inséré ailleurs.
+- **Élément DOM conservé pour chaque carte** : L'extraction du fil retient la référence du conteneur, ce qui permet de cibler les commandes propres à une réponse donnée.
+- **Couverture de test (`tests/15-commande-commentaire.test.js`)** : 13 cas sur l'aiguillage et le ciblage.
+
+## [1.10.5] - 2026-08-15
+
+### 🔌 Bouton de Relance Jamais Posé, et Diagnostic Automatique
+
+> **La fonction créant le bouton « 💬 Répondre à la relance » existait, était testée, et n'était appelée nulle part.**
+> Une réécriture successive en avait supprimé l'appel dans `initTracker`. Aucun test ne pouvait le voir : tous vérifiaient le comportement des fonctions, aucun leur câblage.
+
+- **Appels rétablis (`extension/content.js`)** : `afficherBoutonRelance()` et le diagnostic sont posés en même temps que le bouton principal.
+- **Test de câblage (`tests/14-cablage-boutons.test.js`)** : Vérifie que toute fonction déclarée est effectivement appelée au moins une fois. Une fonction orpheline est désormais une erreur de test, pas une découverte à l'usage.
+- **Diagnostic automatique (`diagnostiquerUneFois`)** : Un content script s'exécute dans un monde isolé — une fonction exposée sur `window` n'est pas appelable depuis la console, qui vise par défaut le contexte de la page. La consigne d'exécuter `__peTrackerDiagnostic()` était donc inapplicable. Le diagnostic s'affiche maintenant de lui-même à l'ouverture d'un fil : nombre de messages lus, auteurs, demandeur identifié, état de verrouillage. Si rien n'est lu, le nombre de liens de profil trouvés est indiqué, ce qui oriente directement le diagnostic.
+- **Version journalisée au chargement** : `[PE Tracker] v1.10.5 activé.` remplace le message générique. Un content script obsolète après un rechargement d'extension incomplet devient visible immédiatement.
+
+## [1.10.4] - 2026-08-15
+
+### 🧹 Filtrage du Bruit d'Interface et Détection du Verrouillage
+
+> **Une capture complète de la Community Console a montré tout ce qui entoure les messages** : badges, compteurs de vues, boutons d'action, avertissements de verrouillage. Rien de tout cela n'a sa place dans le prompt.
+
+- **Filtres étendus (`LIGNES_PARASITES`)** : « Répondre », « Répondre au post d'origine », « J'ai la même question », « Se désabonner », « Verrouillé partiellement », « Cette question est partiellement verrouillée… », « Il se peut que les contenus de la communauté… », « En savoir plus », « Détails », compteurs de vues et de réponses — dans leurs variantes française et anglaise.
+- **Détection du verrouillage (`filVerrouille`)** : Un fil partiellement verrouillé n'accepte que les réponses des Product Experts et de l'auteur d'origine. L'information est transmise au backend et reportée en colonne *Notes* : elle explique pourquoi personne d'autre n'intervient.
+- **Carte de question intégrée au fil** : La question porte elle aussi un lien de profil et le badge « Auteur d'origine ». Elle est donc lue comme premier élément du fil, ce qui donne au modèle le contexte complet — le badge, et non la position, restant la source de vérité pour identifier le demandeur.
+- **Diagnostic complété** : `__peTrackerDiagnostic()` affiche désormais l'état de verrouillage du fil.
+- **Couverture de test étendue (`tests/13-dom-reel.test.js`)** : La reproduction du DOM inclut la carte de question complète, avec ses compteurs, ses boutons et son bandeau de verrouillage.
+
+## [1.10.3] - 2026-08-15
+
+### 🧩 Lecture du Fil Fondée sur la Structure de la Page
+
+> **Sur un fil comportant pourtant une relance, le bouton « 💬 Répondre à la relance » n'apparaissait pas.**
+> Les sélecteurs reposaient sur des noms de classes générés (`scTailwind*`) ne correspondant pas au DOM réel. Une capture d'écran de l'interface a par ailleurs montré que l'ordre des messages n'était pas celui supposé.
+
+- **Extraction par structure plutôt que par classes (`cartesParLienProfil`)** : Chaque réponse porte un lien vers le profil de son auteur. Ce repère structurel ne dépend d'aucun nom de classe, ceux-ci étant générés et susceptibles de changer sans préavis. Les anciens sélecteurs restent en secours.
+- **Identification du demandeur par le badge « Auteur d'origine »** : Sous « Toutes les réponses », le premier message est celui du Product Expert — la question figurant dans un encart distinct au-dessus. La règle « le demandeur est l'auteur du premier message », introduite en 1.10.2, désignait donc le Product Expert lui-même. Le badge posé par le forum est un repère fiable, et il est bilingue (« Auteur d'origine » / « Original poster »).
+- **Nettoyage du corps des messages (`nettoyerCorpsMessage`)** : Retrait des badges d'expertise, horodatages, boutons « Recommander » et « Ajouter un commentaire », et du nom de l'auteur répété en en-tête. Sans cela, ces éléments d'interface partaient dans le prompt.
+- **Seuil d'affichage abaissé à une réponse** : La question ne figurant pas dans la liste des réponses, exiger deux messages masquait le bouton sur les fils ne comportant qu'un échange.
+- **Diagnostic intégré (`__peTrackerDiagnostic()`)** : Exécutable depuis la console du navigateur, il affiche les messages détectés, leurs auteurs et le demandeur identifié — de quoi ajuster les sélecteurs en quelques secondes si l'interface évolue.
+- **Couverture de test (`tests/13-dom-reel.test.js`)** : 18 cas sur une reproduction du DOM réellement observé, dont la régression d'identification du demandeur.
+
+## [1.10.2] - 2026-08-15
+
+### 🔗 Relance sur un Fil Non Suivi, et Fin des Lignes en Double
+
+> **« Dois-je cliquer sur Suivre dans Sheets pour qu'il réponde à une réponse ? »**
+> La question a mis au jour trois défauts : le parcours imposait un détour absurde, ce détour créait des doublons, et l'attribution des rôles ne fonctionnait pas.
+
+- **Enregistrement automatique (`registerThreadOnly_`, action `registerOnly`)** : Une relance sur un fil non suivi déclenche son inscription silencieuse, **sans appel à Gemini**. Générer une réponse initiale sur un fil déjà traité n'aurait aucun sens et consommerait du quota pour rien. Le traitement de la relance enchaîne ensuite tout seul.
+- **Plus aucune ligne en double (`trouverLigneParUrl_`)** : `doPost` ne créait jamais qu'une nouvelle ligne. Cliquer deux fois sur « Suivre dans Sheets », ou suivre un fil déjà présent, dupliquait l'entrée. Un fil déjà suivi voit désormais sa proposition mise à jour sur sa ligne existante. La recherche par URL, écrite trois fois, est factorisée.
+- **Identification du demandeur corrigée** : `formaterRelance` recevait `config.askerName`, une clé qui n'a jamais existé dans le stockage. Tous les intervenants, y compris la personne à aider, étaient donc étiquetés « autre intervenant » — ce qui annulait l'attribution des rôles introduite en 1.10.1. Le demandeur est maintenant déduit de l'auteur du premier message du fil, sans réglage à saisir.
+- **Extraction du thread factorisée (`extraireInfosThread`)** : Titre, auteur, produit et question, jusqu'ici enchâssés dans le gestionnaire de clic, sont désormais réutilisables par le parcours de relance.
+- **Couverture de test (`tests/12-parcours-relance.test.js`)** : 12 cas, dont la régression d'étiquetage et le fil où seul un collègue est intervenu.
+
 ## [1.10.1] - 2026-08-15
 
 ### 🔍 Extraction du Fil : Attribution des Auteurs
