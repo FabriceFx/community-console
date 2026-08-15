@@ -43,6 +43,11 @@ function doPost(e) {
       return recordPublishedReply_(data.url, data.publishedText);
     }
 
+    // 3. Relance : la personne a répondu après la réponse du Product Expert
+    if (data.action === 'followUp') {
+      return handleFollowUp_(data);
+    }
+
     const title = data.title || "Titre inconnu";
     const url = data.url || "";
     const author = data.author || "Auteur inconnu";
@@ -304,4 +309,124 @@ function doGet(e) {
     .setFaviconUrl('https://www.gstatic.com/images/branding/product/1x/sheets_48dp.png')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+/**
+ * Traite une relance : la personne a répondu après le message du Product Expert.
+ *
+ * Le contexte est reconstitué depuis la feuille — question d'origine et réponse
+ * effectivement publiée — de sorte que le modèle sache précisément ce qui a déjà
+ * été dit et ne le reformule pas.
+ *
+ * @param {Object} data La charge utile reçue (url, followUpText)
+ * @returns {GoogleAppsScript.Content.TextOutput}
+ */
+function handleFollowUp_(data) {
+  const url = String(data.url || '').trim();
+  const followUpText = String(data.followUpText || '').trim();
+
+  if (!url || !followUpText) {
+    return jsonOutput_({ status: "error", message: "URL du thread ou message de relance manquant." });
+  }
+
+  const sheet = getTrackingSheet_();
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    return jsonOutput_({ status: "error", message: "Aucune ligne de suivi." });
+  }
+
+  // Retrouver le fil en partant de la fin : la ligne concernée est la plus récente
+  const urls = sheet.getRange(2, CONFIG.COL.URL, lastRow - 1, 1).getValues();
+  let targetRow = -1;
+  for (let i = urls.length - 1; i >= 0; i--) {
+    if (String(urls[i][0] || '').trim() === url) {
+      targetRow = i + 2;
+      break;
+    }
+  }
+
+  if (targetRow === -1) {
+    return jsonOutput_({
+      status: "error",
+      message: "Ce thread n'est pas encore suivi. Cliquez d'abord sur « 📌 Suivre dans Sheets »."
+    });
+  }
+
+  const ligne = sheet.getRange(targetRow, 1, 1, CONFIG.COLUMNS.length).getValues()[0];
+  const idx = (n) => ligne[n - 1];
+
+  // La réponse réellement publiée prime sur la proposition : c'est ce que la personne a lu.
+  const previousAnswer = String(idx(CONFIG.COL.PUBLISHED) || idx(CONFIG.COL.SUMMARY) || '').trim();
+
+  const reply = generateFollowUp({
+    question: idx(CONFIG.COL.QUESTION) || idx(CONFIG.COL.TITLE),
+    previousAnswer: previousAnswer,
+    followUp: followUpText,
+    author: idx(CONFIG.COL.AUTHOR),
+    product: idx(CONFIG.COL.PRODUCT)
+  });
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) {
+    return jsonOutput_({ status: "error", code: "busy", message: "Serveur occupé, réessayez.", summary: reply.text });
+  }
+
+  try {
+    // La proposition courante remplace le contenu de la colonne d'action ;
+    // la réponse déjà publiée reste conservée en colonne « Réponse publiée ».
+    if (reply.text) {
+      sheet.getRange(targetRow, CONFIG.COL.SUMMARY).setRichTextValue(formatMarkdownToRichText(reply.text));
+    }
+
+    // Cette colonne, jusqu'ici inexploitée, prend enfin son sens
+    sheet.getRange(targetRow, CONFIG.COL.FOLLOWUP).setValue(new Date());
+    sheet.getRange(targetRow, CONFIG.COL.STATUS).setValue(
+      reply.suite === 'RESOLU' ? "Résolue" : "En attente (User)"
+    );
+    sheet.getRange(targetRow, CONFIG.COL.NOTES).setValue(buildFollowUpNote_(reply));
+  } finally {
+    lock.releaseLock();
+  }
+
+  return jsonOutput_({
+    status: "success",
+    row: targetRow,
+    summary: reply.text || "",
+    suite: reply.suite,
+    confidence: reply.confidence,
+    repeatsPrevious: !!reply.repeatsPrevious,
+    overlap: reply.overlap || 0,
+    truncated: !!reply.truncated,
+    hadPreviousAnswer: !!previousAnswer
+  });
+}
+
+/**
+ * Compose la note de suivi d'une relance.
+ * @param {Object} reply L'objet renvoyé par generateFollowUp
+ * @returns {string} La note à inscrire
+ */
+function buildFollowUpNote_(reply) {
+  const labels = {
+    RESOLU: "✅ résolu — remerciement",
+    ECHEC: "⚠️ la solution n'a pas fonctionné",
+    INCOMPRIS: "point incompris à reformuler",
+    NOUVEAU: "élément nouveau au dossier",
+    HORS_SUJET: "⚠️ relance hors sujet",
+    ERREUR: "❌ échec de génération"
+  };
+
+  const parts = ["Relance", labels[reply.suite] || reply.suite];
+
+  if (reply.repeatsPrevious) {
+    parts.push("⚠️ redit " + reply.overlap + " % de la réponse précédente — à réécrire");
+  }
+  if (reply.truncated) {
+    parts.push("❌ réponse incomplète");
+  }
+  if (reply.confidence && reply.suite !== 'RESOLU') {
+    parts.push("confiance " + String(reply.confidence).toLowerCase());
+  }
+
+  return parts.join(" • ");
 }

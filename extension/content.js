@@ -479,6 +479,167 @@ function afficherBoutonCapture() {
 }
 
 /**
+ * Extrait les messages du fil, dans l'ordre d'affichage.
+ * @returns {Array<string>} Les textes des messages successifs
+ */
+function extraireMessagesDuFil() {
+  const selecteurs = [
+    '.scTailwindThreadPostcontentroot',
+    '.scTailwindThreadMessageroot',
+    '.thread-message-content',
+    '.message-content'
+  ];
+
+  for (const sel of selecteurs) {
+    const noeuds = Array.from(document.querySelectorAll(sel));
+    if (noeuds.length) {
+      return noeuds
+        .map((n) => (n.innerText || '').trim())
+        .filter((t) => t.length > 10);
+    }
+  }
+
+  return [];
+}
+
+/**
+ * Isole les messages postés APRÈS la réponse du Product Expert.
+ *
+ * On repère sa réponse par recouvrement de mots plutôt que par égalité stricte :
+ * le forum reformate les retours à la ligne et les espaces, et le texte a pu être
+ * retouché avant publication.
+ *
+ * @param {Array<string>} messages Les messages du fil dans l'ordre
+ * @param {string} reponsePe La réponse publiée par le Product Expert
+ * @returns {string} Les messages postérieurs, concaténés
+ */
+function isolerRelance(messages, reponsePe) {
+  if (!messages || !messages.length) return '';
+
+  const normaliser = (t) => String(t || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const reference = normaliser(reponsePe);
+
+  let indexPe = -1;
+  if (reference) {
+    const motsRef = reference.split(' ').filter((m) => m.length > 4);
+
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const courant = normaliser(messages[i]);
+      if (!motsRef.length) break;
+
+      const communs = motsRef.filter((m) => courant.indexOf(m) !== -1).length;
+      if (communs / motsRef.length >= 0.5) {
+        indexPe = i;
+        break;
+      }
+    }
+  }
+
+  // Réponse du PE introuvable : on retient le dernier message du fil, qui est la relance
+  const posterieurs = indexPe === -1
+    ? messages.slice(-1)
+    : messages.slice(indexPe + 1);
+
+  return posterieurs.join('\n\n').trim();
+}
+
+/**
+ * Affiche le bouton de traitement d'une relance.
+ * Présent dès qu'un fil compte plusieurs messages : le Product Expert décide lui-même
+ * si la situation s'y prête, plutôt que de laisser une heuristique trancher à sa place.
+ */
+function afficherBoutonRelance() {
+  if (document.getElementById('pe-followup-btn')) return;
+  if (extraireMessagesDuFil().length < 2) return;
+
+  const btn = document.createElement('button');
+  btn.id = 'pe-followup-btn';
+  btn.innerHTML = '💬 Répondre à la relance';
+  btn.title = "Générer une réponse au dernier message, sans répéter ce qui a déjà été dit";
+
+  btn.addEventListener('click', async () => {
+    const config = await getStorage(['webappUrl', 'sharedSecret']);
+    if (!config.webappUrl || !config.sharedSecret) {
+      alert("Configurez d'abord l'URL de la WebApp et le secret partagé dans les options de l'extension.");
+      return;
+    }
+
+    const messages = extraireMessagesDuFil();
+    if (messages.length < 2) {
+      alert("Ce fil ne contient pas encore de message postérieur à votre réponse.");
+      return;
+    }
+
+    // Le texte de sa propre réponse sert de repère pour isoler ce qui a suivi
+    const relance = isolerRelance(messages, contenuEditeurMemorise || dernierTexteCapture);
+    if (!relance) {
+      alert("Aucun message postérieur à votre réponse n'a été trouvé dans ce fil.");
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Analyse de la relance...';
+
+    try {
+      const response = await sendMessage({
+        action: 'sendToWebapp',
+        webappUrl: config.webappUrl,
+        payload: {
+          action: 'followUp',
+          url: window.location.href,
+          followUpText: relance.substring(0, MAX_CONTENT),
+          secret: config.sharedSecret
+        }
+      });
+
+      const data = (response && response.success) ? response.data : null;
+
+      if (!data || data.status !== 'success') {
+        alert("Échec : " + (data ? data.message : "réponse invalide du backend"));
+        btn.innerHTML = '💬 Répondre à la relance';
+        btn.disabled = false;
+        return;
+      }
+
+      if (data.suite === 'RESOLU') {
+        alert("✅ Relance classée « résolue »\n\nLa personne confirme que c'est réglé. La proposition est un simple accusé de réception, et le suivi passe en « Résolue ».");
+      }
+      if (data.repeatsPrevious) {
+        alert("⚠️ Redite détectée\n\nLa proposition reprend " + data.overlap + " % de votre réponse précédente. La personne vient justement d'indiquer que cela n'a pas fonctionné : réécrivez ce texte plutôt que de le publier.");
+      }
+      if (!data.hadPreviousAnswer) {
+        alert("ℹ️ Votre réponse précédente n'est pas enregistrée dans la feuille.\n\nLa proposition a été rédigée sans savoir précisément ce que vous aviez déjà écrit : relisez-la attentivement pour éviter une redite.");
+      }
+      if (data.truncated) {
+        alert("❌ Réponse incomplète : ne publiez pas ce texte tel quel.");
+      }
+
+      const texte = data.summary || '';
+      if (texte && !data.truncated) {
+        const place = await injecterReponse(texte);
+        if (!place) {
+          try { await navigator.clipboard.writeText(texte); } catch (e) { /* presse-papier indisponible */ }
+        }
+        btn.innerHTML = place ? '✅ Réponse placée' : '✅ Réponse copiée 📋';
+      } else if (texte) {
+        try { await navigator.clipboard.writeText(texte); } catch (e) { /* presse-papier indisponible */ }
+        btn.innerHTML = '❌ Incomplète (copiée)';
+      }
+    } catch (e) {
+      console.error("Erreur lors du traitement de la relance :", e);
+      btn.innerHTML = '❌ Erreur';
+    }
+
+    setTimeout(() => {
+      btn.innerHTML = '💬 Répondre à la relance';
+      btn.disabled = false;
+    }, 4000);
+  });
+
+  document.body.appendChild(btn);
+}
+
+/**
  * Fonction principale : extraire les données et injecter le bouton
  */
 function initTracker() {

@@ -49,6 +49,12 @@ function saveSettings(settings) {
   if (settings.sharedSecret !== undefined) {
     setSharedSecret(settings.sharedSecret);
   }
+  if (settings.closingsFr !== undefined) {
+    setCustomClosings('fr', settings.closingsFr);
+  }
+  if (settings.closingsEn !== undefined) {
+    setCustomClosings('en', settings.closingsEn);
+  }
   return true;
 }
 
@@ -59,8 +65,21 @@ function getSettings() {
   return {
     apiKey: getGeminiApiKey(),
     modelName: getGeminiModelName(),
-    sharedSecret: getSharedSecret()
+    sharedSecret: getSharedSecret(),
+    closingsFr: (getCustomClosings('fr') || DEFAULT_CLOSINGS_FOR_UI('fr')).join('\n').replace(/^$/gm, '-'),
+    closingsEn: (getCustomClosings('en') || DEFAULT_CLOSINGS_FOR_UI('en')).join('\n').replace(/^$/gm, '-')
   };
+}
+
+/**
+ * Renvoie les formules de clôture livrées par défaut pour une langue,
+ * afin de préremplir le panneau de contrôle.
+ * @param {string} lang Code de langue
+ * @returns {Array<string>} Les formules par défaut
+ */
+function DEFAULT_CLOSINGS_FOR_UI(lang) {
+  const shell = REPLY_SHELLS[lang] || REPLY_SHELLS.fr;
+  return shell.closings;
 }
 
 /**

@@ -171,6 +171,22 @@
   </div>
 
   <div class="card">
+    <h2>Formules de clôture</h2>
+    <p>La phrase qui précède votre signature. <b>Écrivez les vôtres</b> : une par ligne, tirées au hasard sans répétition immédiate.</p>
+    <p style="font-size:0.8rem;">Un tiret seul (<code>-</code>) sur une ligne = aucune formule, le message s'arrête sur le fond.</p>
+
+    <div class="input-group">
+      <label for="closingsFr">Français</label>
+      <textarea id="closingsFr" rows="4" style="padding:10px 12px; border:1px solid var(--border); border-radius:8px; font-family:inherit; font-size:0.85rem; resize:vertical; line-height:1.5;"></textarea>
+
+      <label for="closingsEn" style="margin-top:8px;">Anglais</label>
+      <textarea id="closingsEn" rows="4" style="padding:10px 12px; border:1px solid var(--border); border-radius:8px; font-family:inherit; font-size:0.85rem; resize:vertical; line-height:1.5;"></textarea>
+
+      <button id="saveClosingsBtn" onclick="saveSettings()" style="margin-top:8px;">Enregistrer les formules</button>
+    </div>
+  </div>
+
+  <div class="card">
     <h2>Liaison avec l'Extension</h2>
     <p>Pour faire le lien avec l'extension Chrome, vous devez publier ce projet comme une <b>Application Web (WebApp)</b>.</p>
     <p>Assurez-vous que l'accès est défini sur "N'importe qui" ou "Moi-même", selon votre usage.</p>
@@ -183,6 +199,8 @@
         if (settings.apiKey) document.getElementById('apiKey').value = settings.apiKey;
         if (settings.modelName) document.getElementById('modelName').value = settings.modelName;
         if (settings.sharedSecret) document.getElementById('sharedSecret').value = settings.sharedSecret;
+        if (settings.closingsFr) document.getElementById('closingsFr').value = settings.closingsFr;
+        if (settings.closingsEn) document.getElementById('closingsEn').value = settings.closingsEn;
         if (!settings.sharedSecret) {
           const s = document.getElementById('secretStatus');
           s.textContent = '⚠️ Aucun secret : la WebApp refuse toute requête.';
@@ -216,7 +234,9 @@
       const settings = {
         apiKey: document.getElementById('apiKey').value,
         modelName: document.getElementById('modelName').value || 'gemini-3.7-flash',
-        sharedSecret: document.getElementById('sharedSecret').value
+        sharedSecret: document.getElementById('sharedSecret').value,
+        closingsFr: document.getElementById('closingsFr').value,
+        closingsEn: document.getElementById('closingsEn').value
       };
       const btn = document.getElementById('saveBtn');
       const loader = document.getElementById('loader');

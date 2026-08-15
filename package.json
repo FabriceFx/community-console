@@ -1,6 +1,6 @@
 {
   "name": "community-console-pe-tracker",
-  "version": "1.8.3",
+  "version": "1.10.0",
   "description": "Outil de suivi Community Console pour Product Experts Google",
   "private": true,
   "scripts": {

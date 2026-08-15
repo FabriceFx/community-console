@@ -1,6 +1,6 @@
 # Outil de suivi Community Console (PE Tracker)
 
-[![Version](https://img.shields.io/badge/version-1.8.3-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.10.0-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Chrome MV3](https://img.shields.io/badge/Chrome-Manifest_V3-green.svg)](extension/manifest.json)
 [![Google Apps Script](https://img.shields.io/badge/Backend-Google_Apps_Script-blue.svg)](gas/)
@@ -33,11 +33,12 @@ Cet outil complet est destiné aux **Product Experts (PE) Google** pour automati
 - **Refus de répondre à côté** : Chaque thread est classé en `REPONSE`, `CLARIFICATION` ou `HORS_SUJET`. Lorsqu'un élément manque (source de données, message d'erreur, version, étapes déjà tentées), l'outil rédige une demande de précisions au lieu d'une procédure générique inapplicable.
 - **Niveau de confiance affiché** : `HAUTE`, `MOYENNE` ou `FAIBLE`, reporté dans la colonne *Notes* de la feuille et signalé par un avertissement avant publication.
 - **Alerte sur les chemins d'interface non sourcés** : Une procédure « cliquez ici puis là » rédigée sans qu'aucune source n'ait été consultée provient de la mémoire du modèle, donc d'un état passé de l'interface. Les libellés de menus Google étant fréquemment renommés ou supprimés, ces réponses sont rétrogradées en confiance faible et signalées avant publication.
-- **Formules d'accueil et de clôture variables** : Trois accueils et quatre clôtures par langue, tirés sans répétition immédiate, pour que deux réponses successives ne soient pas identifiables à leur emballage.
+- **Formules de clôture personnalisables** : Vos propres phrases, saisies dans le panneau de contrôle, une par ligne, tirées sans répétition immédiate. Un tiret seul déclare une clôture vide : le message s'arrête alors sur le fond, sans transition artificielle avant la signature.
 - **Filtre anti-tics** : Suppression automatique des formules « Voici les étapes à suivre », « En résumé », « Il est important de noter que », « J'espère que cela vous aidera », des titres décoratifs et des séparateurs.
 - **Procédure officielle de récupération de compte** : Toute réponse portant sur une perte d'accès se termine par `https://g.co/recover`, avec une phrase d'introduction adaptée selon que la personne a déjà tenté la procédure ou non. Ce lien est protégé contre la validation HTTP et ne peut jamais être supprimé d'une réponse.
 - **Sources officielles systématiques** : Dès que la recherche fait remonter un article du Centre d'aide pertinent, il est cité en fin de réponse. Un lien n'est supprimé que si son inexistence est **prouvée** (404 confirmé) : un incident réseau ou un 503 ne le fait plus disparaître.
 - **Apprentissage de votre style (boucle de retour)** : L'extension enregistre le texte que vous avez réellement publié, colonne *Réponse publiée*, **uniquement s'il diffère de la proposition**. Vos trois dernières réponses retouchées sont réinjectées dans le prompt comme exemples de style. Une proposition publiée telle quelle n'est pas conservée : elle ne ferait qu'apprendre au modèle sa propre production, dont les tics se renforceraient à chaque génération. La colonne *Notes* indique la part réécrite, ce qui donne une mesure objective de la qualité des propositions.
+- **Traitement des relances** : Bouton **« 💬 Répondre à la relance »** lorsque la personne a répondu après vous. La relance est classée (`RESOLU`, `ECHEC`, `INCOMPRIS`, `NOUVEAU`, `HORS_SUJET`) et la réponse est adaptée à chaque cas — un remerciement appelle deux phrases, un échec interdit de reproposer la même manipulation. Un garde-fou mesure le recouvrement avec votre réponse précédente et vous alerte si la proposition la reformule. La colonne *Date de relance* et le statut *Résolue* sont mis à jour automatiquement.
 - **Relecture humaine obligatoire** : La proposition est placée dans le champ de réponse mais jamais publiée automatiquement.
 
 #### 🔐 Sécurité

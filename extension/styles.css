@@ -30,9 +30,41 @@
   transform: translateY(0);
 }
 
-#pe-capture-btn {
+#pe-followup-btn {
   position: fixed;
   top: 152px;
+  right: 24px;
+  z-index: 999999;
+  background-color: #f29900;
+  color: #ffffff;
+  border: none;
+  border-radius: 24px;
+  padding: 11px 22px;
+  font-family: 'Google Sans', Roboto, Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(242,153,0,0.3);
+  transition: all 0.2s ease;
+}
+
+#pe-followup-btn:hover {
+  background-color: #d68600;
+  box-shadow: 0 6px 16px rgba(242,153,0,0.4);
+  transform: translateY(-2px);
+}
+
+#pe-followup-btn:disabled {
+  background-color: #80868b;
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Décalé sous le bouton de relance lorsque les deux sont présents */
+#pe-capture-btn {
+  position: fixed;
+  top: 204px;
   right: 24px;
   z-index: 999999;
   background-color: #ffffff;

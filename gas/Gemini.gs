@@ -588,6 +588,125 @@ function sembleTronque_(text) {
 }
 
 /**
+ * Construit les instructions système pour répondre à une relance de l'utilisateur.
+ *
+ * Répondre à une relance n'est pas répondre à une question : le fil a une histoire.
+ * Le piège principal est la redite — un modèle à qui l'on donne l'ensemble du fil
+ * reformule volontiers ce qui a déjà été dit, ce qui exaspère une personne venant
+ * précisément d'expliquer que cela n'a pas fonctionné.
+ *
+ * @returns {string} L'instruction système complète
+ */
+function buildFollowUpInstruction_() {
+  return `Tu rédiges à la place d'un Product Expert bénévole des forums d'aide Google. Il a déjà répondu à cette personne, qui vient de lui écrire de nouveau. Tu rédiges sa réponse à cette relance.
+
+RÈGLE ABSOLUE N°1 — NE JAMAIS REDIRE CE QUI A DÉJÀ ÉTÉ DIT
+La personne a lu la réponse précédente. Reproduire la même procédure, même reformulée, est le pire résultat possible : elle vient d'expliquer que cela n'a pas fonctionné ou n'était pas clair. Si tu dois t'appuyer sur un point déjà traité, renvoie-y en une demi-phrase (« comme indiqué plus haut ») sans le redévelopper.
+Avant d'écrire, demande-toi : « qu'est-ce que j'apporte que la réponse précédente ne contenait pas ? » Si la réponse est « rien », alors pose une question précise ou reconnais la limite — n'inventez pas du contenu pour meubler.
+
+RÈGLE ABSOLUE N°2 — ACCUSER RÉCEPTION DE CE QU'ELLE A FAIT
+Commence par reconnaître concrètement ce qu'elle rapporte : ce qu'elle a essayé, ce qu'elle a vu, le message d'erreur obtenu. Une demi-phrase suffit, mais elle doit être précise, pas générique.
+
+RÈGLE ABSOLUE N°3 — NE JAMAIS INVENTER
+Aucune URL, aucun identifiant d'article, aucun nom de menu ou d'option dont tu n'es pas certain. Les interfaces Google changent : si la personne dit ne pas trouver un élément, envisage qu'il ait été renommé, déplacé ou supprimé, plutôt que de répéter le même chemin.
+
+FORMAT DE SORTIE OBLIGATOIRE
+Commence par ces trois lignes, puis une ligne contenant uniquement ---, puis le message :
+LANG: <code de la langue employée par la personne : fr, en, de, es, it...>
+SUITE: <RESOLU | ECHEC | INCOMPRIS | NOUVEAU | HORS_SUJET>
+CONFIANCE: <HAUTE | MOYENNE | FAIBLE>
+---
+
+COMMENT CLASSER LA RELANCE, ET QUOI RÉPONDRE DANS CHAQUE CAS
+
+RESOLU — elle remercie, confirme que c'est réglé, ou clôt l'échange.
+Réponds en deux phrases maximum. Pas de procédure, pas de conseil supplémentaire, pas de relance commerciale. Un simple accusé de réception cordial. C'est le cas où la réponse la plus courte est la meilleure.
+
+ECHEC — elle a suivi les indications et cela n'a pas fonctionné.
+Ne repropose JAMAIS la même manipulation. Trois issues possibles, à choisir selon ce dont tu disposes :
+- il te manque un élément pour trancher : demande précisément ce qui s'est passé (message exact, écran obtenu, étape où cela bloque) ;
+- tu as une hypothèse différente : expose-la, en expliquant en une phrase pourquoi la première piste n'a pas abouti ;
+- il n'existe pas d'autre solution : dis-le franchement plutôt que de faire durer. Une impasse annoncée clairement vaut mieux qu'une piste supplémentaire inventée.
+
+INCOMPRIS — elle ne comprend pas un point précis, ou ne trouve pas un élément d'interface.
+Ne reprends QUE ce point. Reformule-le autrement, ne le répète pas à l'identique — si elle n'a pas compris la première formulation, la redire ne servira à rien. Si elle ne trouve pas un élément, envisage qu'il n'existe plus.
+
+NOUVEAU — elle apporte un élément qui change le diagnostic.
+Signale en une demi-phrase que cet élément modifie l'analyse, puis traite la situation réelle. C'est le seul cas où une procédure complète se justifie.
+
+HORS_SUJET — la relance porte sur un tout autre sujet.
+Indique brièvement que cela relève d'une autre question, et suggère d'ouvrir un nouveau fil.
+
+STYLE
+- N'écris ni salutation d'ouverture ni signature : elles sont gérées automatiquement. Un message de relance ne recommence pas par une formule de bienvenue.
+- 120 mots maximum. 40 mots maximum en cas RESOLU.
+- Tout est rédigé dans la langue employée par la personne. Les gabarits ci-dessus sont en français pour t'être expliqués : ce sont des consignes, jamais des phrases à recopier.
+- Pas de « Voici les étapes à suivre », « En résumé », « Il est important de noter que », « N'hésitez pas à », « Je comprends votre frustration », pas de titres en gras, pas d'emoji, pas de séparateurs.
+- Une source du Centre d'aide uniquement si elle apporte un élément NOUVEAU, et seulement si googleSearch l'a réellement renvoyée. Ne recite pas le lien déjà fourni précédemment.` + buildStyleExamplesSection_();
+}
+
+/**
+ * Analyse l'en-tête d'une réponse de relance (LANG / SUITE / CONFIANCE).
+ * @param {string} raw Le texte brut renvoyé par le modèle
+ * @returns {{lang: string, suite: string, confidence: string, body: string}}
+ */
+function parseFollowUpEnvelope_(raw) {
+  const text = String(raw || '').trim();
+  const result = { lang: '', suite: 'NOUVEAU', confidence: 'MOYENNE', body: text };
+
+  const langMatch = text.match(/^[ \t]*LANG[ \t]*:[ \t]*([A-Za-z\-]{2,5})[ \t]*$/mi);
+  const suiteMatch = text.match(/^[ \t]*SUITE[ \t]*:[ \t]*(RESOLU|ECHEC|INCOMPRIS|NOUVEAU|HORS_SUJET)[ \t]*$/mi);
+  const confidenceMatch = text.match(/^[ \t]*CONFIANCE[ \t]*:[ \t]*(HAUTE|MOYENNE|FAIBLE)[ \t]*$/mi);
+
+  if (langMatch) result.lang = langMatch[1].toLowerCase();
+  if (suiteMatch) result.suite = suiteMatch[1].toUpperCase();
+  if (confidenceMatch) result.confidence = confidenceMatch[1].toUpperCase();
+
+  if (!langMatch && !suiteMatch && !confidenceMatch) return result;
+
+  const separatorIndex = text.search(/^[ \t]*-{3,}[ \t]*$/m);
+  if (separatorIndex !== -1 && separatorIndex < 200) {
+    result.body = text.slice(separatorIndex).replace(/^[ \t]*-{3,}[ \t]*$/m, '').trim();
+  } else {
+    result.body = text
+      .replace(/^[ \t]*LANG[ \t]*:.*$/mi, '')
+      .replace(/^[ \t]*SUITE[ \t]*:.*$/mi, '')
+      .replace(/^[ \t]*CONFIANCE[ \t]*:.*$/mi, '')
+      .trim();
+  }
+
+  return result;
+}
+
+/**
+ * Assemble un message de relance : corps + clôture éventuelle + signature.
+ *
+ * Volontairement sans formule d'accueil : un troisième message dans un fil ne
+ * recommence pas par « Bonjour X, et bienvenue sur la communauté ». C'est l'un des
+ * marqueurs les plus visibles d'une réponse produite sans tenir compte du contexte.
+ *
+ * @param {string} lang Code de langue
+ * @param {string} body Corps du message
+ * @param {string} suite Classification de la relance
+ * @returns {string} Le message complet
+ */
+function buildFollowUpResponse(lang, body, suite) {
+  const langKey = REPLY_SHELLS[lang] ? lang : 'fr';
+  const texte = String(body || '').trim();
+
+  // Sur un simple remerciement, une formule de clôture invitant à revenir serait de trop
+  if (String(suite || '').toUpperCase() === 'RESOLU') {
+    return [texte, '', 'Fabrice'].join('\n');
+  }
+
+  const custom = (typeof getCustomClosings === 'function') ? getCustomClosings(langKey) : null;
+  const pool = (custom && custom.length) ? custom : REPLY_SHELLS[langKey].closings;
+  const closing = pickVariant_(pool, 'PE_LAST_CLOSING_' + langKey);
+
+  return closing ? [texte, '', closing, '', 'Fabrice'].join('\n') : [texte, '', 'Fabrice'].join('\n');
+}
+
+/**
  * Analyse l'en-tête structuré renvoyé par le modèle (LANG / STATUT / CONFIANCE).
  * Tolérant : si l'en-tête est absent ou malformé, le texte entier est traité comme le corps du message.
  *
@@ -775,10 +894,9 @@ const REPLY_SHELLS = {
       'Bonjour {name}, bienvenue sur le forum {product} !'
     ],
     closings: [
-      "Si ça ne débloque rien, redonnez-moi le détail et on regarde ensemble.",
-      "Dites-moi si ça avance de votre côté.",
-      "Si un point reste flou, répondez ici, j'y reviendrai.",
-      "Tenez-moi au courant de ce que ça donne."
+      "Si vous avez d'autres questions ou si des points restent flous, n'hésitez pas à revenir vers nous.",
+      "J'espère que cette réponse vous sera utile.",
+      ""
     ],
     clarifications: [
       "Avec ces éléments, je pourrai vous répondre précisément.",
@@ -793,10 +911,9 @@ const REPLY_SHELLS = {
       'Hello {name}, welcome to the {product} forum!'
     ],
     closings: [
-      "If that doesn't sort it out, post the details back here and we'll dig further.",
-      "Let me know how it goes.",
-      "If anything is unclear, just reply here.",
-      "Keep me posted."
+      "If you have any further questions or if anything remains unclear, feel free to reply.",
+      "I hope this answer is helpful to you.",
+      ""
     ],
     clarifications: [
       "With those details I can give you a precise answer.",
@@ -811,10 +928,9 @@ const REPLY_SHELLS = {
       'Hallo {name}, willkommen im {product}-Forum!'
     ],
     closings: [
-      "Wenn das nicht hilft, schreiben Sie die Details hier hinein, dann schauen wir weiter.",
-      "Sagen Sie mir gern Bescheid, wie es läuft.",
-      "Falls etwas unklar bleibt, antworten Sie einfach hier.",
-      "Halten Sie mich auf dem Laufenden."
+      "Wenn Sie weitere Fragen haben oder etwas unklar geblieben ist, können Sie gerne antworten.",
+      "Ich hoffe, dass Ihnen diese Antwort weiterhilft.",
+      ""
     ],
     clarifications: [
       "Damit kann ich Ihnen eine genaue Antwort geben.",
@@ -829,10 +945,9 @@ const REPLY_SHELLS = {
       'Hola {name}, ¡bienvenido al foro de {product}!'
     ],
     closings: [
-      "Si con eso no se resuelve, cuénteme los detalles y seguimos mirándolo.",
-      "Dígame cómo le va.",
-      "Si algo no queda claro, responda por aquí.",
-      "Manténgame al tanto."
+      "Si tiene más preguntas o si algo no le queda claro, no dude en responder.",
+      "Espero que esta respuesta le sea de utilidad.",
+      ""
     ],
     clarifications: [
       "Con esos datos podré darle una respuesta precisa.",
@@ -847,10 +962,9 @@ const REPLY_SHELLS = {
       'Ciao {name}, benvenuto sul forum di {product}!'
     ],
     closings: [
-      "Se non si sblocca, riscrivi qui i dettagli e ci guardiamo insieme.",
-      "Fammi sapere come va.",
-      "Se qualcosa non è chiaro, rispondi pure qui.",
-      "Tienimi aggiornato."
+      "Se hai altre domande o se qualcosa non è chiaro, non esitare a rispondere.",
+      "Spero che questa risposta ti sia utile.",
+      ""
     ],
     clarifications: [
       "Con questi elementi posso darti una risposta precisa.",
@@ -924,10 +1038,21 @@ function buildFormattedResponse(lang, displayName, product, technicalResponse, s
     .replace('{name}', name)
     .replace('{product}', String(product || '').trim());
 
-  const closingPool = isClarification ? shell.clarifications : shell.closings;
-  const closing = pickVariant_(closingPool, 'PE_LAST_CLOSING_' + langKey);
+  // Les formules saisies dans le panneau de contrôle priment sur celles fournies par défaut :
+  // ces phrases signent le message, elles doivent être celles du Product Expert.
+  const custom = (typeof getCustomClosings === 'function') ? getCustomClosings(langKey) : null;
+  const closingPool = isClarification
+    ? shell.clarifications
+    : (custom && custom.length ? custom : shell.closings);
 
-  return [greeting, '', String(technicalResponse || '').trim(), '', closing, '', 'Fabrice'].join('\n');
+  const closing = pickVariant_(closingPool, 'PE_LAST_CLOSING_' + langKey);
+  const body = String(technicalResponse || '').trim();
+
+  // Une clôture vide est un choix légitime : le message s'arrête alors sur le fond,
+  // sans phrase de transition artificielle avant la signature.
+  const blocs = closing ? [greeting, '', body, '', closing, '', 'Fabrice'] : [greeting, '', body, '', 'Fabrice'];
+
+  return blocs.join('\n');
 }
 
 /**
@@ -1266,4 +1391,144 @@ function formatMarkdownToRichText(text) {
   }
 
   return builder.build();
+}
+
+/**
+ * Rédige une proposition de réponse à une relance de l'utilisateur.
+ *
+ * @param {Object} contexte
+ * @param {string} contexte.question La question d'origine
+ * @param {string} contexte.previousAnswer La réponse déjà publiée par le Product Expert
+ * @param {string} contexte.followUp Le ou les messages postés depuis cette réponse
+ * @param {string} contexte.author Prénom affiché de la personne
+ * @param {string} contexte.product Produit Google concerné
+ * @returns {{ok: boolean, suite: string, confidence: string, lang: string, text: string, repeatsPrevious: boolean, truncated: boolean}}
+ */
+function generateFollowUp(contexte) {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) {
+    return {
+      ok: false, suite: 'ERREUR', confidence: 'FAIBLE', lang: 'fr', repeatsPrevious: false, truncated: false,
+      text: "Clé API Gemini manquante. Configurez-la via « 🛠️ Suivi PE > Ouvrir le panneau de contrôle »."
+    };
+  }
+
+  const followUp = sanitizePii(String(contexte.followUp || '').trim());
+  if (!followUp) {
+    return {
+      ok: false, suite: 'ERREUR', confidence: 'FAIBLE', lang: 'fr', repeatsPrevious: false, truncated: false,
+      text: "Aucun message de relance n'a été transmis."
+    };
+  }
+
+  const previousAnswer = String(contexte.previousAnswer || '').trim();
+  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${getGeminiModelName()}:generateContent`;
+
+  const userTurn = `Produit concerné : ${contexte.product || 'Google'}
+Prénom affiché de la personne : ${contexte.author || 'Utilisateur'}
+
+QUESTION D'ORIGINE :
+"""
+${sanitizePii(String(contexte.question || '').trim()) || '(non disponible)'}
+"""
+
+RÉPONSE DÉJÀ PUBLIÉE PAR LE PRODUCT EXPERT — à ne surtout pas reformuler :
+"""
+${previousAnswer || '(non disponible : appuie-toi sur le fil ci-dessous pour déduire ce qui a déjà été dit)'}
+"""
+
+MESSAGE DE RELANCE, auquel tu dois répondre :
+"""
+${followUp}
+"""`;
+
+  const construireOptions = (maxTokens) => ({
+    "method": "post",
+    "contentType": "application/json",
+    "headers": { "x-goog-api-key": apiKey },
+    "muteHttpExceptions": true,
+    "payload": JSON.stringify({
+      "systemInstruction": { "parts": [{ "text": buildFollowUpInstruction_() }] },
+      "contents": [{ "role": "user", "parts": [{ "text": userTurn }] }],
+      "tools": [{ "googleSearch": {} }],
+      "generationConfig": { "temperature": 0.85, "topP": 0.95, "maxOutputTokens": maxTokens }
+    })
+  });
+
+  try {
+    let candidate = null;
+    let rawText = '';
+    let tronque = false;
+    let maxTokens = CONFIG.MAX_OUTPUT_TOKENS;
+
+    for (let tentative = 0; tentative < 2; tentative++) {
+      const response = fetchWithRetry(apiUrl, construireOptions(maxTokens));
+      const json = JSON.parse(response.getContentText());
+
+      if (json.error) {
+        console.error("Erreur API Gemini (relance) : " + redactSecrets_(json.error.message));
+        return {
+          ok: false, suite: 'ERREUR', confidence: 'FAIBLE', lang: 'fr', repeatsPrevious: false, truncated: false,
+          text: `Erreur API : ${redactSecrets_(json.error.message)}`
+        };
+      }
+
+      candidate = (json.candidates && json.candidates.length > 0) ? json.candidates[0] : null;
+      if (!candidate) break;
+
+      if (candidate.finishReason && ['SAFETY', 'RECITATION', 'BLOCKLIST', 'PROHIBITED_CONTENT'].indexOf(candidate.finishReason) !== -1) {
+        return {
+          ok: false, suite: 'ERREUR', confidence: 'FAIBLE', lang: 'fr', repeatsPrevious: false, truncated: false,
+          text: "La génération a été interrompue par l'API (" + candidate.finishReason + "). Rédigez cette réponse manuellement."
+        };
+      }
+
+      rawText = extraireTexteCandidat_(candidate);
+      tronque = candidate.finishReason === 'MAX_TOKENS' || sembleTronque_(parseFollowUpEnvelope_(rawText).body);
+      if (!tronque) break;
+
+      maxTokens *= 2;
+    }
+
+    if (!candidate || !rawText) {
+      return {
+        ok: false, suite: 'ERREUR', confidence: 'FAIBLE', lang: 'fr', repeatsPrevious: false, truncated: tronque,
+        text: "Le modèle n'a renvoyé aucun texte exploitable."
+      };
+    }
+
+    const envelope = parseFollowUpEnvelope_(rawText);
+    const validated = cleanAndValidateUrls(envelope.body, candidate);
+    const humanized = humanizeBody_(validated);
+
+    const lang = REPLY_SHELLS[envelope.lang] ? envelope.lang : detectLanguage(followUp + "\n" + humanized);
+    const localise = localiserLigneRecuperation_(humanized, lang);
+
+    // Garde-fou anti-redite : si la proposition recouvre largement la réponse déjà publiée,
+    // c'est qu'elle la reformule — exactement ce que la personne vient de dire inopérant.
+    const recouvrement = previousAnswer ? 1 - tauxDeModification_(previousAnswer, localise) : 0;
+    const redite = recouvrement >= CONFIG.MAX_FOLLOWUP_OVERLAP;
+
+    if (redite) {
+      console.warn("Proposition de relance recouvrant " + Math.round(recouvrement * 100) + " % de la réponse précédente.");
+    }
+
+    return {
+      ok: true,
+      suite: envelope.suite,
+      confidence: (redite || tronque) ? 'FAIBLE' : envelope.confidence,
+      lang: lang,
+      repeatsPrevious: redite,
+      overlap: Math.round(recouvrement * 100),
+      truncated: tronque,
+      text: buildFollowUpResponse(lang, localise, envelope.suite)
+    };
+
+  } catch (e) {
+    console.error("Exception lors de la génération de relance : " + redactSecrets_(e));
+    return {
+      ok: false, suite: 'ERREUR', confidence: 'FAIBLE', lang: 'fr', repeatsPrevious: false, truncated: false,
+      text: "Erreur lors de la communication avec l'API Gemini."
+    };
+  }
 }

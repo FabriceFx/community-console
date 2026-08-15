@@ -2,6 +2,35 @@
 
 Toutes les modifications notables apportées à ce projet sont documentées dans ce fichier.
 
+## [1.10.0] - 2026-08-15
+
+### 💬 Traitement des Relances
+
+> **Répondre à une relance n'est pas répondre à une question : le fil a une histoire.**
+> Le piège est la redite. Un modèle à qui l'on donne l'ensemble du fil reformule volontiers ce qui a déjà été dit — précisément ce qui exaspère une personne venant d'expliquer que cela n'a pas fonctionné.
+
+- **Instructions système dédiées (`buildFollowUpInstruction_`)** : Trois règles absolues — ne jamais redire, accuser réception de ce que la personne a fait, ne rien inventer. La consigne impose de se demander « qu'est-ce que j'apporte que la réponse précédente ne contenait pas ? » et, si la réponse est « rien », de poser une question ou de reconnaître la limite plutôt que de meubler.
+- **Classification en cinq cas** : `RESOLU` (deux phrases maximum, aucune procédure), `ECHEC` (interdiction de reproposer la même manipulation ; demander le détail, changer de piste, ou annoncer l'impasse), `INCOMPRIS` (reformuler autrement le seul point concerné), `NOUVEAU` (le seul cas justifiant une procédure complète), `HORS_SUJET`.
+- **Aucune formule de bienvenue (`buildFollowUpResponse`)** : Un troisième message dans un fil ne recommence pas par « Bonjour X, et bienvenue sur la communauté » — c'est l'un des marqueurs les plus visibles d'une réponse produite sans tenir compte du contexte. Sur un `RESOLU`, la clôture invitant à revenir disparaît également.
+- **Garde-fou anti-redite (`CONFIG.MAX_FOLLOWUP_OVERLAP`)** : Le recouvrement de mots entre la proposition et la réponse déjà publiée est mesuré. Au-delà de 60 %, la confiance est forcée à `FAIBLE` et un avertissement chiffré s'affiche avant publication.
+- **Contexte reconstitué depuis la feuille (`handleFollowUp_`)** : Question d'origine et surtout **réponse réellement publiée** — celle que la personne a lue — sont transmises au modèle. Si elle n'a jamais été capturée, l'extension le signale explicitement, la redite devenant alors impossible à détecter de façon fiable.
+- **Isolement de la relance (`isolerRelance`)** : Les messages du fil sont extraits dans l'ordre, et la réponse du Product Expert repérée par recouvrement de mots plutôt que par égalité stricte — le forum reformate les espaces et le texte a pu être retouché avant publication.
+- **La colonne « Date de relance » prend enfin son sens** : Renseignée automatiquement, avec passage du statut en *Résolue* sur un `RESOLU`, en *En attente (User)* sinon.
+- **Couverture de test (`tests/10-relance.test.js`)** : 24 cas, dont la distinction entre une vraie relance et une reformulation déguisée.
+
+## [1.9.0] - 2026-08-15
+
+### ✍️ Les Formules de Clôture Redeviennent Celles du Product Expert
+
+> **« Dites-moi si ça avance de votre côté. » Personne ne parle comme ça.**
+> La 1.6.0 avait remplacé la formule de clôture d'origine par des variantes inventées, au motif de casser la répétition. Le remède était pire que le mal : la répétition était un défaut de forme, la voix d'emprunt en est un de fond.
+
+- **Formules d'origine restaurées (`gas/Gemini.gs`)** : « Si vous avez d'autres questions ou si des points restent flous, n'hésitez pas à revenir vers nous » et ses équivalents dans les cinq langues reviennent comme valeurs par défaut, débarrassées de la répétition du prénom qui les alourdissait.
+- **Personnalisation depuis le panneau de contrôle (`getCustomClosings`, `setCustomClosings`)** : Deux champs, français et anglais, une formule par ligne. Les formules saisies priment sur celles livrées par défaut. Plus aucune tournure n'est imposée par l'outil.
+- **Clôture vide assumée** : Un tiret seul sur une ligne déclare l'absence de formule — le message s'arrête sur le fond, puis la signature. C'est souvent le plus naturel, et c'était impossible jusqu'ici.
+- **Variation conservée** : Le tirage sans répétition immédiate s'applique aux formules personnalisées comme aux valeurs par défaut, y compris en mélangeant formules et clôture vide.
+- **Couverture de test (`tests/09-formules-cloture.test.js`)** : 15 cas. L'un d'eux a révélé que le garde-fou « configuration vide = non configurée » avalait le cas légitime de la clôture volontairement absente.
+
 ## [1.8.3] - 2026-08-15
 
 ### ✂️ Réponses Tronquées : Détection, Relance et Refus d'Injection

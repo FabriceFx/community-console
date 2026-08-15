@@ -45,6 +45,11 @@ const CONFIG = {
   // les jetons de réflexion se déduisent de cette enveloppe et tronquaient le texte visible.
   MAX_OUTPUT_TOKENS: 4096,
 
+  // Recouvrement maximal toléré entre une réponse de relance et la réponse déjà publiée.
+  // Au-delà, la proposition reformule ce qui a déjà été dit — précisément ce que la
+  // personne vient de signaler comme inopérant.
+  MAX_FOLLOWUP_OVERLAP: 0.6,
+
   // Part minimale de mots réécrits pour qu'une réponse publiée compte comme retouchée.
   // En deçà, elle n'apprend rien au modèle sur le style du PE et n'est pas conservée.
   MIN_EDIT_RATIO: 0.05,
@@ -168,6 +173,48 @@ function assertAllowedHost_(url) {
   if (!allowed) {
     throw new Error("Domaine non autorisé. Seules les URL " + CONFIG.ALLOWED_HOSTS.join(', ') + " sont acceptées.");
   }
+}
+
+/**
+ * Récupère les formules de clôture personnalisées pour une langue.
+ *
+ * Ces phrases sont la signature du Product Expert : elles doivent être les siennes,
+ * pas celles imaginées par un tiers. Une ligne vide dans la liste signifie
+ * « aucune formule de clôture » — une réponse peut très bien s'arrêter sur le fond.
+ *
+ * @param {string} lang Code de langue ('fr', 'en', 'de', 'es', 'it')
+ * @returns {Array<string>|null} Les formules personnalisées, ou null si non configurées
+ */
+function getCustomClosings(lang) {
+  const raw = PropertiesService.getScriptProperties().getProperty('PE_CLOSINGS_' + lang);
+  if (raw === null || raw === undefined) return null;
+
+  // Chaque ligne est une variante ; « - » déclare explicitement une clôture vide.
+  // La propriété étant supprimée quand la saisie est vide (voir setCustomClosings),
+  // sa seule présence signifie que le choix est délibéré — y compris « aucune formule ».
+  const list = String(raw).split('\n').map(function (line) {
+    const trimmed = line.trim();
+    return trimmed === '-' ? '' : trimmed;
+  });
+
+  return list.length ? list : null;
+}
+
+/**
+ * Enregistre les formules de clôture personnalisées pour une langue.
+ * @param {string} lang Code de langue
+ * @param {string} text Une formule par ligne ; « - » pour une clôture vide
+ */
+function setCustomClosings(lang, text) {
+  const props = PropertiesService.getScriptProperties();
+  const clean = String(text || '').trim();
+
+  if (!clean) {
+    props.deleteProperty('PE_CLOSINGS_' + lang);
+    return;
+  }
+
+  props.setProperty('PE_CLOSINGS_' + lang, clean);
 }
 
 /**
