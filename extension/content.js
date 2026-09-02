@@ -80,11 +80,21 @@ let alerteVersionAffichee = false;
  * L'avertissement de version n'apparaissant qu'une fois par page, le message d'échec
  * doit porter l'explication à lui seul.
  *
- * @param {Object} data La réponse du backend
+ * Reçoit la réponse complète du service worker, et non la seule charge utile : un
+ * échec de transport — WebApp introuvable, déploiement archivé, page de connexion —
+ * n'a pas de `data`, et son explication vit dans `error`.
+ *
+ * @param {Object} reponse La réponse du service worker ({success, data, error})
  * @returns {string}
  */
-function messageEchec_(data) {
-  if (!data) return "réponse invalide du backend.";
+function messageEchec_(reponse) {
+  if (!reponse) return "aucune réponse de l'extension.";
+
+  // Échec de transport : le service worker a déjà rédigé l'explication
+  if (!reponse.success) return reponse.error || "réponse invalide de la WebApp.";
+
+  const data = reponse.data;
+  if (!data) return "réponse invalide de la WebApp.";
 
   const locale = (chrome.runtime && chrome.runtime.getManifest)
     ? chrome.runtime.getManifest().version : '';
@@ -1070,7 +1080,7 @@ function creerBoutonRelance(premiereIntervention) {
       verifierVersionBackend(data);
 
       if (!data || data.status !== 'success') {
-        alert("Échec de l'analyse de la relance.\n\n" + messageEchec_(data));
+        alert("Échec de l'analyse de la relance.\n\n" + messageEchec_(response));
         btn.innerHTML = libelleInitial;
         btn.disabled = false;
         return;
@@ -1295,9 +1305,12 @@ function creerBoutonPrincipal() {
       const data = (response && response.success && response.data) ? response.data : null;
       verifierVersionBackend(data);
 
-      if (data && data.status === 'error') {
-        alert("Le backend a refusé la demande.\n\n" + messageEchec_(data));
-        btn.innerHTML = '❌ Refusé';
+      // `data` absent = échec de transport : la WebApp n'a pas répondu en JSON.
+      // Ce cas était auparavant traité comme un succès, et la page d'erreur HTML de
+      // Google atterrissait dans le champ de réponse du forum.
+      if (!data || data.status === 'error') {
+        alert("La demande n'a pas abouti.\n\n" + messageEchec_(response));
+        btn.innerHTML = '❌ Échec';
         etatBouton(btn, 'erreur');
         return;
       }

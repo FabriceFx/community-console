@@ -12,7 +12,7 @@ const CONFIG = {
   // L'extension la compare à la sienne : le projet Apps Script et l'extension se
   // déploient séparément, et un backend resté en arrière produit des comportements
   // incompréhensibles côté navigateur.
-  VERSION: "1.13.2",
+  VERSION: "1.13.3",
 
   // Budget de génération. Large à dessein : sur un modèle qui raisonne avant de répondre,
   // les jetons de réflexion se déduisent de cette enveloppe et tronquaient le texte visible.

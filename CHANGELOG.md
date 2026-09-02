@@ -2,6 +2,26 @@
 
 Toutes les modifications notables apportées à ce projet sont documentées dans ce fichier.
 
+## [1.13.3] - 2026-09-02
+
+### 🚨 Une erreur ne doit jamais se faire passer pour une réponse
+
+> **Une page d'erreur HTML de Google s'est retrouvée dans le champ de réponse du forum, présentée comme le texte rédigé par Gemini.**
+> Le service worker traitait toute réponse non-JSON comme une génération réussie, avec le corps brut en guise de proposition :
+> `sendResponse({ success: true, data: { status: "success", summary: texte } });`
+> Le code HTTP n'était même pas consulté. Une WebApp introuvable, un déploiement archivé, une redirection vers l'écran de connexion : tout ressortait en « succès ».
+
+- **Rejet des réponses non-JSON (`extension/background.js`)** : Elles sont désormais signalées comme des échecs, et leur corps n'est jamais transmis comme proposition.
+- **Code HTTP vérifié** : du JSON servi avec un code d'erreur reste une erreur, et le message du backend est repris dans l'explication.
+- **Causes reconnues et expliquées (`expliquerReponseInattendue`)** :
+  - *« Page introuvable »* — l'adresse ne correspond à aucun déploiement actif : URL erronée, déploiement archivé ou supprimé, ou URL tronquée à la copie (elle doit se terminer par `/exec`). La manœuvre exacte est donnée.
+  - *Écran de connexion Google* — le déploiement n'est pas accessible à « N'importe qui ».
+  - *5xx* — incident passager, annoncé comme tel.
+  - *4xx* et page HTML quelconque — l'URL enregistrée est mise en cause.
+- **`messageEchec_` reçoit la réponse complète** et non la seule charge utile : un échec de transport n'a pas de `data`, et son explication vit dans `error`.
+- **Le bouton principal s'arrête sur une charge utile absente**. Il poursuivait auparavant avec un `summaryText` vide, sans rien dire.
+- **`tests/30-reponses-non-json.test.js`** : 17 contrôles construits sur la page « Page introuvable » réellement reçue — échec signalé, HTML jamais transmis, causes nommées — plus l'écran de connexion, les codes HTTP, le JSON en erreur, l'URL non configurée, et la non-régression du cas nominal.
+
 ## [1.13.2] - 2026-09-02
 
 ### 🔎 La cause accompagne désormais le symptôme
