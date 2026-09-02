@@ -72,6 +72,36 @@ function estVisible(el) {
 let alerteVersionAffichee = false;
 
 /**
+ * Compose le message d'un échec en y rattachant sa cause probable.
+ *
+ * Un backend resté en arrière refuse les requêtes pour des raisons qui n'ont aucun
+ * sens vu du navigateur : la v1.13.0 a retiré le suivi Google Sheets, et l'ancien
+ * code réclame encore l'URL du fil pour retrouver une ligne qui n'existe plus.
+ * L'avertissement de version n'apparaissant qu'une fois par page, le message d'échec
+ * doit porter l'explication à lui seul.
+ *
+ * @param {Object} data La réponse du backend
+ * @returns {string}
+ */
+function messageEchec_(data) {
+  if (!data) return "réponse invalide du backend.";
+
+  const locale = (chrome.runtime && chrome.runtime.getManifest)
+    ? chrome.runtime.getManifest().version : '';
+  const desaccord = locale && data.backendVersion && data.backendVersion !== locale;
+
+  const detail = data.message || 'erreur inconnue';
+  if (!desaccord) return detail;
+
+  return detail +
+    "\n\n⚠️ Cause probable : le backend n'a pas été redéployé." +
+    "\nExtension : v" + locale + "  —  Apps Script : v" + data.backendVersion + "." +
+    "\n\nDans l'éditeur Apps Script : Déployer > Gérer les déploiements > ✏️ > " +
+    "Version : Nouvelle version > Déployer. Recopier les fichiers ne suffit pas, " +
+    "la WebApp sert la version de déploiement.";
+}
+
+/**
  * Compare la version du backend à celle de l'extension.
  *
  * Le projet Apps Script et l'extension se déploient séparément : recharger l'extension
@@ -1040,7 +1070,7 @@ function creerBoutonRelance(premiereIntervention) {
       verifierVersionBackend(data);
 
       if (!data || data.status !== 'success') {
-        alert("Échec : " + (data ? data.message : "réponse invalide du backend"));
+        alert("Échec de l'analyse de la relance.\n\n" + messageEchec_(data));
         btn.innerHTML = libelleInitial;
         btn.disabled = false;
         return;
@@ -1266,7 +1296,7 @@ function creerBoutonPrincipal() {
       verifierVersionBackend(data);
 
       if (data && data.status === 'error') {
-        alert("Le backend a refusé la demande :\n\n" + (data.message || 'Erreur inconnue'));
+        alert("Le backend a refusé la demande.\n\n" + messageEchec_(data));
         btn.innerHTML = '❌ Refusé';
         etatBouton(btn, 'erreur');
         return;

@@ -2,6 +2,18 @@
 
 Toutes les modifications notables apportées à ce projet sont documentées dans ce fichier.
 
+## [1.13.2] - 2026-09-02
+
+### 🔎 La cause accompagne désormais le symptôme
+
+> **« Échec : URL du thread ou message de relance manquant. »**
+> Message exact du point de vue de l'ancien backend, incompréhensible du point de vue de l'utilisateur. La v1.13.0 a retiré le suivi Google Sheets ; l'extension n'envoie donc plus l'URL du fil, puisqu'il n'y a plus de ligne à retrouver. Une WebApp restée en v1.12.x la réclame encore et refuse la requête.
+
+- **`messageEchec_` (`extension/content.js`)** : Tout échec renvoyé par le backend est désormais accompagné de sa cause probable lorsque les versions divergent — les deux numéros, la manœuvre exacte de redéploiement, et le rappel que recopier les fichiers ne suffit pas. Le message d'origine est conservé en tête.
+- **Pourquoi ce n'était pas déjà couvert** : `verifierVersionBackend` affiche bien un avertissement, mais **une seule fois par page** (`alerteVersionAffichee`). Passé ce premier message, chaque échec suivant réapparaissait nu. L'explication ne pouvait pas reposer sur lui seul.
+- **Aucun bruit quand tout va bien** : versions concordantes, message du backend rendu tel quel.
+- **`tests/29-desaccord-de-version.test.js`** : 12 contrôles, dont le cas exact rencontré (extension v1.13.1 / backend v1.12.8) et les cas dégradés — réponse absente, backend sans numéro de version, message vide.
+
 ## [1.13.1] - 2026-09-02
 
 ### 📍 Intégration des boutons dans la console
