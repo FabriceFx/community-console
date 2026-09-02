@@ -1,5 +1,10 @@
 /**
- * @fileoverview Fichier de configuration et gestion des propriétés
+ * @fileoverview Fichier de configuration et gestion des propriétés.
+ *
+ * L'outil ne conserve aucune question ni aucune réponse : chaque demande est
+ * traitée puis oubliée. Le classeur Google Sheets n'héberge plus qu'un panneau
+ * de réglages — clé API, secret partagé, signature, formules de clôture — dont
+ * la WebApp mobile a besoin côté serveur.
  */
 
 const CONFIG = {
@@ -7,45 +12,7 @@ const CONFIG = {
   // L'extension la compare à la sienne : le projet Apps Script et l'extension se
   // déploient séparément, et un backend resté en arrière produit des comportements
   // incompréhensibles côté navigateur.
-  VERSION: "1.12.8",
-
-  // Nom de la feuille de calcul principale
-  SHEET_NAME: "Suivi Questions",
-
-  // Colonnes de la feuille
-  COLUMNS: [
-    "ID",
-    "Date d'ajout",
-    "URL du Thread",
-    "Produit",
-    "Titre",
-    "Question",
-    "Auteur",
-    "Statut",
-    "Résumé / Action (Gemini)",
-    "Date de relance",
-    "Notes",
-    "Réponse publiée"
-  ],
-
-  // Index des colonnes (1-based), pour ne plus les coder en dur dans le reste du projet
-  COL: {
-    ID: 1,
-    DATE: 2,
-    URL: 3,
-    PRODUCT: 4,
-    TITLE: 5,
-    QUESTION: 6,
-    AUTHOR: 7,
-    STATUS: 8,
-    SUMMARY: 9,
-    FOLLOWUP: 10,
-    NOTES: 11,
-    PUBLISHED: 12
-  },
-
-  // Nombre d'exemples de style réinjectés dans le prompt (voir getStyleExamples_)
-  STYLE_EXAMPLES_COUNT: 3,
+  VERSION: "1.13.0",
 
   // Budget de génération. Large à dessein : sur un modèle qui raisonne avant de répondre,
   // les jetons de réflexion se déduisent de cette enveloppe et tronquaient le texte visible.
@@ -55,20 +22,6 @@ const CONFIG = {
   // Au-delà, la proposition reformule ce qui a déjà été dit — précisément ce que la
   // personne vient de signaler comme inopérant.
   MAX_FOLLOWUP_OVERLAP: 0.6,
-
-  // Part minimale de mots réécrits pour qu'une réponse publiée compte comme retouchée.
-  // En deçà, elle n'apprend rien au modèle sur le style du PE et n'est pas conservée.
-  MIN_EDIT_RATIO: 0.05,
-
-  // Statuts par défaut
-  STATUSES: [
-    "Nouvelle",
-    "En attente (User)",
-    "Escaladée",
-    "Résolue",
-    "Verrouillée",
-    "Abandonnée"
-  ],
 
   // Domaines autorisés pour l'extraction serveur (anti-SSRF sur la WebApp mobile)
   ALLOWED_HOSTS: [

@@ -3,11 +3,9 @@
  *
  * Elle était codée en dur (« Fabrice ») à quatre endroits : les deux assemblages de
  * message, l'assemblage de relance, et la reconnaissance de fin de message dans
- * `stripReplyShell_`. Le projet étant sous licence MIT et destiné aux Product Experts
- * en général, tout autre bénévole qui l'installait signait ses réponses du prénom de
- * l'auteur de l'outil — et sa boucle d'apprentissage du style, ne reconnaissant plus
- * la fin de ses propres messages, conservait la signature dans les exemples envoyés
- * au modèle.
+ * les deux assemblages de message et l'assemblage de relance. Le projet étant sous
+ * licence MIT et destiné aux Product Experts en général, tout autre bénévole qui
+ * l'installait signait ses réponses du prénom de l'auteur de l'outil.
  */
 const fs = require('fs'), vm = require('vm');
 
@@ -22,9 +20,7 @@ function makeSandbox(proprietes) {
     console: { warn(){}, error(){}, log(){} },
     UrlFetchApp: { fetch: () => ({ getResponseCode: () => 200, getHeaders: () => ({}), getContentText: () => '' }) },
     PropertiesService: { getScriptProperties: () => props, getUserProperties: () => props },
-    CacheService: { getScriptCache: () => ({ get: () => null, put(){}, remove(){} }) },
-    Utilities: { sleep(){}, getUuid: () => 'x' },
-    SpreadsheetApp: { newRichTextValue: () => ({ setText(){return this;}, build(){return {};} }), getActiveSpreadsheet: () => ({ getSheetByName: () => null }) }
+    Utilities: { sleep(){}, getUuid: () => 'x' }
   };
   vm.createContext(sb);
   vm.runInContext(fs.readFileSync('gas/Config.gs', 'utf8'), sb);
@@ -66,27 +62,6 @@ check('remerciement : corps et signature seuls', sb.buildFollowUpResponse('fr', 
 sb = makeSandbox(CLOTURE);
 check('relance non signée si aucune signature', sb.buildFollowUpResponse('fr', 'Parfait, merci de la confirmation.', 'RESOLU'),
   t => t === "Parfait, merci de la confirmation.");
-
-console.log('\nExemples de style : la coquille est retirée, signature comprise');
-sb = makeSandbox({ PE_SIGNATURE: 'Camille' });
-const publie = "Bonjour Marie,\n\nLe partage est bloqué par la règle du domaine.\n\nDites-moi si ça avance.\n\nCamille";
-let corps = sb.stripReplyShell_(publie);
-check('accueil retiré',    corps, t => !/Bonjour/.test(t));
-check('signature retirée', corps, t => !/Camille/.test(t));
-check('clôture retirée',   corps, t => !/Dites-moi/.test(t));
-check('fond conservé',     corps, t => t === "Le partage est bloqué par la règle du domaine.");
-
-// La signature est saisie librement : un point ou une parenthèse ne doit pas y être
-// interprété comme un opérateur d'expression régulière.
-sb = makeSandbox({ PE_SIGNATURE: 'J. Martin (PE)' });
-corps = sb.stripReplyShell_("Bonjour Marie,\n\nLe fond du message.\n\nBonne journée.\n\nJ. Martin (PE)");
-check('signature à caractères spéciaux reconnue', corps, t => t === "Le fond du message.");
-check('aucune signature résiduelle',              corps, t => !/Martin/.test(t));
-
-// Un texte signé autrement ne doit pas faire perdre le fond
-sb = makeSandbox({ PE_SIGNATURE: 'Camille' });
-corps = sb.stripReplyShell_("Bonjour Marie,\n\nLe fond du message.\n\nBonne journée.");
-check('signature étrangère : le fond survit', corps, t => t === "Le fond du message.");
 
 console.log('\n' + (fails === 0 ? 'Tous les tests passent.' : fails + ' test(s) en échec.'));
 process.exit(fails ? 1 : 0);

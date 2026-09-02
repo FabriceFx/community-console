@@ -134,7 +134,11 @@ function createMobileEnv(customHtml = '') {
   vm.runInContext(fs.readFileSync('gas/Api.gs', 'utf8'), sandbox);
   vm.runInContext(fs.readFileSync('gas/MobileBackend.gs', 'utf8'), sandbox);
 
+  // Le texte réellement soumis au modèle est mémorisé : sans feuille où le relire,
+  // c'est le seul moyen de vérifier quelle source de contenu a été retenue.
+  let dernierContenuGemini = '';
   sandbox.generateReply = function(content, author, product) {
+    dernierContenuGemini = content;
     return {
       ok: true,
       status: 'REPONSE',
@@ -151,6 +155,7 @@ function createMobileEnv(customHtml = '') {
     CONFIG,
     mockSheet,
     sheetRows,
+    get dernierContenuGemini() { return dernierContenuGemini; },
     scriptProperties,
     setHtml(html) { currentHtml = html; },
     processMobileThreadUrl: sandbox.processMobileThreadUrl
@@ -252,19 +257,20 @@ console.log('\n4. Priorités et Extraction du Contenu');
   // A. Contenu fourni manuellement (priorité absolue)
   env.setHtml('<title>Titre</title><meta name="description" content="Description du meta tag">');
   const resManuel = run(BASE_THREAD, '', 'Texte fourni manuellement par le Product Expert', SECRET);
-  check('contenu fourni manuellement prioritaire', env.mockSheet.getRange(env.mockSheet.getLastRow(), env.CONFIG.COL.QUESTION).getValue(), q => q === 'Texte fourni manuellement par le Product Expert');
+  // Plus de feuille où lire : le contenu retenu se vérifie sur ce qui a été transmis à Gemini
+  check('contenu fourni manuellement prioritaire', env.dernierContenuGemini, q => q === 'Texte fourni manuellement par le Product Expert');
   check('contentIsThin est false', resManuel.contentIsThin, v => v === false);
 
   // B. Contenu depuis meta description
   env.setHtml('<title>Titre</title><meta name="description" content="Voici la question complète issue de la meta description">');
   const resMeta = run(BASE_THREAD, '', '', SECRET);
-  check('contenu extrait de meta description', env.mockSheet.getRange(env.mockSheet.getLastRow(), env.CONFIG.COL.QUESTION).getValue(), q => q.includes('Voici la question complète'));
+  check('contenu extrait de meta description', env.dernierContenuGemini, q => q.includes('Voici la question complète'));
   check('contentIsThin est false sur meta suffisante', resMeta.contentIsThin, v => v === false);
 
   // C. Contenu trop court / manquant -> repli sur le titre et flag contentIsThin
   env.setHtml('<title>Question trop courte</title><meta name="description" content="Court">');
   const resThin = run(BASE_THREAD, '', '', SECRET);
-  check('repli sur le titre si contenu < 15 caractères', env.mockSheet.getRange(env.mockSheet.getLastRow(), env.CONFIG.COL.QUESTION).getValue(), q => q === 'Question trop courte');
+  check('repli sur le titre si contenu < 15 caractères', env.dernierContenuGemini, q => q === 'Question trop courte');
   check('contentIsThin est true', resThin.contentIsThin, v => v === true);
 }
 
@@ -304,7 +310,7 @@ console.log('\n5. Les 4 Stratégies d\'Extraction de l\'Auteur');
   check('repli sur "Utilisateur inconnu" si aucun marqueur', resInconnu.author, a => a === 'Utilisateur inconnu');
 }
 
-console.log('\n6. Enregistrement dans Google Sheets et Résultat de sortie');
+console.log('\n6. Résultat de sortie, sans aucune conservation');
 {
   const env = createMobileEnv();
   env.setHtml('<title>Mon écran clignote - Communauté Google</title><meta name="description" content="Depuis la mise à jour, mon écran clignote.">');
@@ -318,17 +324,14 @@ console.log('\n6. Enregistrement dans Google Sheets et Résultat de sortie');
 
   check('statut success retourné', res.status, v => v === 'success');
   check('backendVersion présent', !!res.backendVersion, v => v === true);
-  check('identifiant 8 caractères généré', res.id, id => id === 'mobile-u');
+  check('produit détecté', res.product, p => p === 'Google Chrome');
+  check('auteur repris', res.author, a => a === 'Camille');
   check('proposition de réponse générée', res.summary, s => s.includes('Proposition Mobile pour Camille (Google Chrome)'));
+  check('niveau de fiabilité transmis', res.confidence, c => typeof c === 'string' && c.length > 0);
 
-  const lastRow = env.mockSheet.getLastRow();
-  const rowVals = env.mockSheet.getRange(lastRow, 1, 1, 12).getValues()[0];
-  check('ligne ajoutée dans la feuille', lastRow >= 2, v => v === true);
-  check('URL enregistrée', rowVals[env.CONFIG.COL.URL - 1], u => u.includes('chrome/thread/123456'));
-  check('produit enregistré', rowVals[env.CONFIG.COL.PRODUCT - 1], p => p === 'Google Chrome');
-  check('auteur enregistré', rowVals[env.CONFIG.COL.AUTHOR - 1], a => a === 'Camille');
-  check('statut enregistré "Nouvelle"', rowVals[env.CONFIG.COL.STATUS - 1], s => s === 'Nouvelle');
-  check('note contient mention Mobile iPhone', rowVals[env.CONFIG.COL.NOTES - 1], n => n.includes('Ajouté via WebApp Mobile (iPhone)'));
+  // L'outil ne conserve rien : aucune ligne, aucun identifiant de suivi
+  check('aucun identifiant de suivi renvoyé', res.id, v => v === undefined);
+  check('aucune ligne écrite', env.mockSheet.getLastRow(), n => n === 1);
 }
 
 console.log('\n' + (fails === 0 ? 'Tous les tests passent.' : fails + ' test(s) en échec.'));

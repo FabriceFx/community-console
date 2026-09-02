@@ -30,27 +30,31 @@ console.log('\nToute fonction déclarée doit être réellement appelée');
   'extraireInfosThread',
   'filVerrouille',
   'nettoyerCorpsMessage',
-  'choisirTexteACapturer',
-  'lireTexteEditeur',
-  'estBoutonPublier',
-  'enregistrerReponsePubliee'
+  'lireTexteEditeur'
 ].forEach((nom) => {
   check(nom + ' déclarée', declare(nom), v => v === true);
   check(nom + ' appelée au moins une fois', appels(nom), n => n >= 1);
 });
 
-console.log('\nLe bouton de capture manuelle a été retiré');
-// Retiré à la demande du Product Expert : il ne s'en servait pas. L'enregistrement
-// de la réponse publiée reste automatique, au clic sur « Publier ». Ce contrôle évite
-// qu'une réintroduction partielle laisse du code mort — styles orphelins, drapeau
-// écrit et jamais lu — comme c'était le cas avant le retrait.
-['afficherBoutonCapture', 'captureDejaReussie', 'pe-capture-btn'].forEach((trace) => {
-  check('aucune trace de « ' + trace +' » dans content.js', source.includes(trace), v => v === false);
+console.log('\nL\'outil ne conserve plus aucune question ni réponse');
+// L'enregistrement de la réponse publiée a été retiré avec le suivi Google Sheets :
+// le Product Expert ne retouchait jamais les propositions, le corpus de style était
+// donc toujours vide. Ce contrôle empêche qu'un fragment revienne sans le reste.
+['afficherBoutonCapture', 'captureDejaReussie', 'pe-capture-btn', 'enregistrerReponsePubliee',
+ 'estBoutonPublier', 'choisirTexteACapturer', 'dernierTexteCapture', 'recordPublished',
+ 'registerOnly'].forEach((trace) => {
+  check('aucune trace de « ' + trace + ' »', source.includes(trace), v => v === false);
 });
 check('aucun style orphelin dans styles.css', fs.readFileSync('extension/styles.css', 'utf8').includes('pe-capture-btn'), v => v === false);
-// L'enregistrement automatique, lui, doit rester câblé
-check('enregistrerReponsePubliee toujours appelée', appels('enregistrerReponsePubliee'), n => n >= 1);
+
+// La mémoire de l'éditeur subsiste : elle ne quitte pas la page et sert uniquement
+// à situer votre message dans le fil lors d'une relance.
 check('la mémoire de l\'éditeur reste alimentée', source, t => t.includes('contenuEditeurMemorise = texte'));
+check('elle sert de repère à la relance',        source, t => /isolerRelanceStructuree\([\s\S]{0,120}contenuEditeurMemorise/.test(t));
+
+// Le contexte du fil doit accompagner la relance, le backend ne le relit plus
+check('la question d\'origine est transmise',   source, t => /question: messages\[0\]/.test(t));
+check('la réponse précédente est transmise',    source, t => t.includes('previousAnswerFromThread:'));
 
 console.log('\nPoints d\'entrée attendus dans initTracker');
 const initTracker = source.slice(source.indexOf('function initTracker()'));

@@ -22,6 +22,14 @@ Conséquences à respecter lors de toute évolution :
 - Toute langue ajoutée à `REPLY_SHELLS` doit rester configurable : le panneau de contrôle dérive ses champs de cette liste (`languesGerees_`), il ne faut pas y recopier de langue en dur.
 - Aucune publication automatique : la proposition est placée dans le champ de réponse, jamais envoyée.
 
+## Aucune conservation de données
+L'outil ne stocke **ni question, ni réponse, ni historique**. Chaque requête est traitée puis oubliée, et le classeur Google Sheets ne sert qu'à porter le panneau de réglages — la WebApp mobile a besoin de la clé API côté serveur.
+
+Conséquences à respecter lors de toute évolution :
+- `doPost` et `processMobileThreadUrl` ne doivent **jamais** écrire dans une feuille. Le bac à sable de `tests/21-backend-sans-etat.test.js` ne fournit ni `SpreadsheetApp` ni `LockService` : toute écriture y lèverait une exception.
+- Le contexte d'une relance est transmis par l'appelant (`question`, `previousAnswerFromThread`). Le backend ne le relit nulle part : c'est la seule source, et elle reflète le fil tel qu'il est.
+- `SpreadsheetApp` ne doit être employé que pour `getUi()` — menu et barre latérale.
+
 ## Sécurité
 - La WebApp est déployée en accès « N'importe qui » : `doPost` et `processMobileThreadUrl` doivent **toujours** commencer par `assertAuthorized_()`.
 - L'extraction serveur doit **toujours** passer par `assertAllowedHost_()`.

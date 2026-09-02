@@ -1,5 +1,14 @@
 /**
- * @fileoverview Réception des requêtes externes (Webhook doPost)
+ * @fileoverview Réception des requêtes externes (Webhook doPost).
+ *
+ * Le service est sans état : chaque requête est traitée puis oubliée. Aucune
+ * question, aucune réponse, aucun suivi n'est conservé — le classeur Google Sheets
+ * n'héberge plus que le panneau de réglages, dont la WebApp mobile a besoin.
+ *
+ * Conséquence sur les relances : le contexte du fil ne peut plus être relu côté
+ * serveur, il doit être transmis par l'appelant. L'extension le lit déjà dans la
+ * page, c'est même la source la plus fiable — la feuille pouvait, elle, ignorer
+ * une réponse rédigée hors de l'outil.
  */
 
 /**
@@ -22,7 +31,7 @@ function jsonOutput_(obj) {
  *
  * La WebApp étant déployée en accès « N'importe qui », chaque requête doit présenter le
  * secret partagé configuré dans le panneau de contrôle. Sans cette barrière, un tiers
- * connaissant l'URL /exec pourrait consommer le quota Gemini et écrire dans la feuille.
+ * connaissant l'URL /exec pourrait consommer le quota Gemini.
  *
  * @param {Object} e Objet d'événement contenant les données POST
  */
@@ -35,7 +44,7 @@ function doPost(e) {
       return jsonOutput_({ status: "error", message: "Charge utile JSON invalide." });
     }
 
-    // 1. Autorisation — avant tout appel à Gemini, pour ne pas consommer de quota inutilement
+    // Autorisation d'abord — avant tout appel à Gemini, pour ne pas consommer de quota
     try {
       assertAuthorized_(data.secret);
     } catch (authErr) {
@@ -43,117 +52,11 @@ function doPost(e) {
       return jsonOutput_({ status: "error", code: "unauthorized", message: authErr.message });
     }
 
-    // 2. Enregistrement d'une réponse publiée : pas de génération, simple écriture
-    if (data.action === 'recordPublished') {
-      return recordPublishedReply_(data.url, data.publishedText);
-    }
-
-    // 3. Relance : la personne a répondu après la réponse du Product Expert
     if (data.action === 'followUp') {
       return handleFollowUp_(data);
     }
 
-    // 4. Enregistrement seul, sans appel à Gemini : sert à inscrire un fil déjà
-    //    répondu, pour lequel générer une réponse initiale n'aurait aucun sens.
-    if (data.action === 'registerOnly') {
-      return registerThreadOnly_(data);
-    }
-
-    const title = data.title || "Titre inconnu";
-    const url = data.url || "";
-    const author = data.author || "Auteur inconnu";
-    const product = data.product || "Inconnu";
-    const content = data.content || "";
-
-    // La clé transmise ne sert qu'à la requête en cours : elle n'est jamais persistée côté
-    // serveur, sinon un appelant pourrait écraser la clé API du propriétaire de la feuille.
-    const providedApiKey = (data.apiKey || "").trim();
-
-    // 2. Générer la proposition de réponse
-    let reply = { ok: false, status: "", confidence: "", lang: "", text: "" };
-    if (content) {
-      reply = generateReply(content, author, product, providedApiKey);
-    }
-    const summary = reply.text || "";
-
-    // 3. Écrire dans la feuille sous verrou (évite l'écrasement de ligne si deux requêtes se croisent)
-    const lock = LockService.getScriptLock();
-    if (!lock.tryLock(15000)) {
-      console.warn("Verrou script indisponible : écriture abandonnée pour éviter toute corruption de ligne.");
-      return jsonOutput_({
-        status: "error",
-        code: "busy",
-        message: "Le serveur traite déjà une autre demande. Réessayez dans quelques secondes.",
-        summary: summary,
-        replyStatus: reply.status,
-        confidence: reply.confidence
-      });
-    }
-
-    const newId = Utilities.getUuid().substring(0, 8);
-
-    try {
-      const sheet = getTrackingSheet_();
-
-      // Un fil déjà suivi est mis à jour plutôt que dupliqué : sans cela, chaque clic
-      // sur « Suivre dans Sheets » créait une ligne supplémentaire pour le même thread.
-      const existante = trouverLigneParUrl_(sheet, url);
-      if (existante !== -1) {
-        if (summary) {
-          sheet.getRange(existante, CONFIG.COL.SUMMARY).setRichTextValue(formatMarkdownToRichText(summary));
-        }
-        sheet.getRange(existante, CONFIG.COL.NOTES).setValue(buildNote_("Analyse relancée depuis l'extension", reply));
-
-        return jsonOutput_({
-          status: "success",
-          message: "Thread déjà suivi : la proposition a été mise à jour.",
-          id: sheet.getRange(existante, CONFIG.COL.ID).getValue(),
-          row: existante,
-          duplicate: true,
-          summary: summary,
-          replyStatus: reply.status,
-          confidence: reply.confidence,
-          uiPathUnsourced: !!reply.uiPathUnsourced,
-          truncated: !!reply.truncated,
-          lang: reply.lang
-        });
-      }
-
-      sheet.appendRow([
-        newId,
-        new Date(),
-        url,
-        product,
-        title,
-        content,
-        author,
-        CONFIG.STATUSES[0], // "Nouvelle"
-        "", // Le résumé est injecté en RichText juste après
-        "",
-        buildNote_("Ajouté via extension", reply),
-        "" // Réponse publiée, renseignée après coup par l'extension
-      ]);
-
-      // Injecter le résumé avec le formatage riche (Gras, puces)
-      const row = sheet.getLastRow();
-      if (summary) {
-        sheet.getRange(row, CONFIG.COL.SUMMARY).setRichTextValue(formatMarkdownToRichText(summary));
-      }
-    } finally {
-      lock.releaseLock();
-    }
-
-    return jsonOutput_({
-      status: "success",
-      message: "Thread ajouté avec succès",
-      id: newId,
-      summary: summary,
-      replyStatus: reply.status,
-      confidence: reply.confidence,
-      uiPathUnsourced: !!reply.uiPathUnsourced,
-      truncated: !!reply.truncated,
-      lang: reply.lang
-    });
+    return handleNouvelleQuestion_(data);
 
   } catch (error) {
     // Ce filet attrape aussi les exceptions d'UrlFetchApp, dont le message contient
@@ -165,253 +68,85 @@ function doPost(e) {
 }
 
 /**
- * Récupère la feuille de suivi en garantissant la présence des en-têtes et des validations.
- * @returns {GoogleAppsScript.Spreadsheet.Sheet} La feuille prête à l'emploi
- */
-function getTrackingSheet_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName(CONFIG.SHEET_NAME);
-
-  if (!sheet) {
-    sheet = ss.insertSheet(CONFIG.SHEET_NAME);
-    setupSheet(sheet, true);
-    return sheet;
-  }
-
-  // Une feuille dont la première cellule est vide n'a jamais reçu ses en-têtes
-  if (!sheet.getRange(1, 1).getValue()) {
-    setupSheet(sheet, true);
-  }
-
-  ensureColumns_(sheet);
-  return sheet;
-}
-
-/**
- * Ajoute les colonnes manquantes sur une feuille créée par une version antérieure.
- * `setupSheet` ne pose ses en-têtes que sur une feuille vierge : sans cette migration,
- * une feuille existante n'aurait jamais reçu la colonne « Réponse publiée ».
+ * Rédige une proposition de réponse à une question, sans rien conserver.
  *
- * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet La feuille à mettre à niveau
- */
-function ensureColumns_(sheet) {
-  const lastColumn = sheet.getLastColumn();
-  if (lastColumn >= CONFIG.COLUMNS.length) return;
-
-  const missing = CONFIG.COLUMNS.slice(lastColumn);
-  sheet.getRange(1, lastColumn + 1, 1, missing.length)
-    .setValues([missing])
-    .setFontWeight("bold")
-    .setBackground("#e0e0e0");
-
-  console.log("Colonnes ajoutées à la feuille de suivi : " + missing.join(', '));
-}
-
-/**
- * Enregistre le texte réellement publié par le Product Expert sur le forum.
- *
- * C'est la brique centrale de la boucle de retour : l'écart entre la proposition de
- * Gemini et le message finalement publié décrit le style et le jugement du PE bien
- * mieux que n'importe quelle consigne. Ces réponses alimentent ensuite le prompt
- * comme exemples (voir getStyleExamples_), et l'outil s'aligne au fil des usages.
- *
- * @param {string} threadUrl L'URL du thread concerné
- * @param {string} publishedText Le texte final effectivement publié
+ * @param {Object} data La charge utile reçue (author, product, content, apiKey)
  * @returns {GoogleAppsScript.Content.TextOutput}
  */
-function recordPublishedReply_(threadUrl, publishedText) {
-  const url = String(threadUrl || '').trim();
-  const text = String(publishedText || '').trim();
+function handleNouvelleQuestion_(data) {
+  const content = String(data.content || '').trim();
 
-  if (!url || !text) {
-    return jsonOutput_({ status: "error", message: "URL du thread ou texte publié manquant." });
+  if (!content) {
+    return jsonOutput_({ status: "error", message: "Aucun texte de question n'a été transmis." });
   }
 
-  const lock = LockService.getScriptLock();
-  if (!lock.tryLock(15000)) {
-    return jsonOutput_({ status: "error", code: "busy", message: "Serveur occupé, réessayez." });
-  }
+  // La clé transmise ne sert qu'à la requête en cours : elle n'est jamais persistée côté
+  // serveur, sinon un appelant pourrait écraser la clé API du propriétaire du script.
+  const reply = generateReply(
+    content,
+    data.author || "Auteur inconnu",
+    data.product || "Inconnu",
+    String(data.apiKey || '').trim()
+  );
 
-  try {
-    const sheet = getTrackingSheet_();
-    const targetRow = trouverLigneParUrl_(sheet, url);
-
-    if (targetRow === -1) {
-      return jsonOutput_({ status: "error", message: "Thread introuvable dans la feuille de suivi." });
-    }
-
-    sheet.getRange(targetRow, CONFIG.COL.STATUS).setValue("En attente (User)");
-
-    // Comparer au texte proposé : une réponse publiée telle quelle n'apprend rien
-    // au modèle sur le style du PE, et la réinjecter lui ferait apprendre sa propre
-    // production — ses tics d'écriture se renforceraient à chaque génération.
-    const proposed = sheet.getRange(targetRow, CONFIG.COL.SUMMARY).getValue();
-    const editRatio = tauxDeModification_(proposed, text);
-    const modified = editRatio >= CONFIG.MIN_EDIT_RATIO;
-    const percent = Math.round(editRatio * 100);
-
-    const baseNote = String(sheet.getRange(targetRow, CONFIG.COL.NOTES).getValue() || '')
-      .replace(/ • (publiée sans modification|publiée après retouche[^•]*)/g, '');
-
-    if (!modified) {
-      // Rien n'est stocké : le texte est déjà en colonne « Résumé / Action (Gemini) »
-      sheet.getRange(targetRow, CONFIG.COL.NOTES).setValue(baseNote + " • publiée sans modification");
-      return jsonOutput_({
-        status: "success",
-        message: "Publication enregistrée : proposition reprise telle quelle, rien à apprendre.",
-        row: targetRow,
-        modified: false,
-        editRatio: percent
-      });
-    }
-
-    sheet.getRange(targetRow, CONFIG.COL.PUBLISHED).setValue(text);
-    sheet.getRange(targetRow, CONFIG.COL.NOTES).setValue(baseNote + " • publiée après retouche (" + percent + " % réécrit)");
-
-    // Le corpus de style vient de changer : forcer sa reconstruction au prochain appel
-    invalidateStyleExamplesCache_();
-
-    return jsonOutput_({
-      status: "success",
-      message: "Réponse retouchée enregistrée : elle servira d'exemple de style.",
-      row: targetRow,
-      modified: true,
-      editRatio: percent
-    });
-  } finally {
-    lock.releaseLock();
-  }
+  return jsonOutput_({
+    status: reply.ok ? "success" : "error",
+    message: reply.ok ? "Proposition générée." : reply.text,
+    summary: reply.text || "",
+    replyStatus: reply.status,
+    confidence: reply.confidence,
+    uiPathUnsourced: !!reply.uiPathUnsourced,
+    truncated: !!reply.truncated,
+    lang: reply.lang
+  });
 }
 
 /**
- * Réduit une URL de fil à son identité stable.
+ * Traite une relance : la personne a répondu après le message du Product Expert.
  *
- * Une même question se présente sous plusieurs URL : `?hl=fr` ajouté par le sélecteur
- * de langue, `?msgid=...` sur un lien de notification, une ancre `#reply`, un libellé
- * de titre remanié après édition. Comparées telles quelles, ces formes désignaient
- * des fils différents : la feuille se remplissait de doublons, la relance répondait
- * « ce thread n'est pas encore suivi », et la réponse retouchée n'était jamais
- * enregistrée — la boucle d'apprentissage du style restait vide sans raison visible.
+ * Tout le contexte vient de l'appelant, qui a le fil sous les yeux : la question
+ * d'origine et la réponse déjà publiée. C'est ce qui permet au garde-fou anti-redite
+ * de disposer d'une référence sans qu'aucune donnée ne soit conservée entre deux appels.
  *
- * Le numéro qui suit /thread/ identifie le fil à lui seul.
- *
- * @param {string} url L'URL telle qu'observée dans le navigateur
- * @returns {string} La forme canonique servant de clé de rapprochement
- */
-function normaliserUrlFil_(url) {
-  const brut = String(url || '').trim().split('#')[0].split('?')[0].replace(/\/+$/, '');
-  if (!brut) return '';
-
-  const fil = brut.match(/^(.*\/thread\/\d+)(?:\/|$)/i);
-  return (fil ? fil[1] : brut).toLowerCase();
-}
-
-/**
- * Retrouve la ligne d'un thread par son URL, en partant de la fin.
- *
- * Le rapprochement se fait sur la forme canonique des deux côtés : une ligne créée
- * depuis une URL portant `?hl=fr` reste retrouvable depuis l'URL nue, et inversement.
- *
- * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet La feuille de suivi
- * @param {string} url L'URL recherchée
- * @returns {number} Le numéro de ligne, ou -1 si le thread n'est pas suivi
- */
-function trouverLigneParUrl_(sheet, url) {
-  const cible = normaliserUrlFil_(url);
-  if (!cible) return -1;
-
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return -1;
-
-  const urls = sheet.getRange(2, CONFIG.COL.URL, lastRow - 1, 1).getValues();
-  for (let i = urls.length - 1; i >= 0; i--) {
-    if (normaliserUrlFil_(urls[i][0]) === cible) return i + 2;
-  }
-  return -1;
-}
-
-/**
- * Inscrit un fil dans la feuille sans générer de réponse.
- *
- * Utile lorsqu'une relance arrive sur un fil jamais suivi : produire une réponse
- * initiale y serait inutile — le Product Expert a déjà répondu — et consommerait
- * du quota pour rien. Si le fil est déjà présent, rien n'est dupliqué.
- *
- * @param {Object} data La charge utile (url, title, author, product, content)
+ * @param {Object} data La charge utile reçue
  * @returns {GoogleAppsScript.Content.TextOutput}
  */
-function registerThreadOnly_(data) {
-  const url = String(data.url || '').trim();
-  if (!url) {
-    return jsonOutput_({ status: "error", message: "URL du thread manquante." });
+function handleFollowUp_(data) {
+  const followUpText = String(data.followUpText || '').trim();
+
+  if (!followUpText) {
+    return jsonOutput_({ status: "error", message: "Aucun message de relance n'a été transmis." });
   }
 
-  const lock = LockService.getScriptLock();
-  if (!lock.tryLock(15000)) {
-    return jsonOutput_({ status: "error", code: "busy", message: "Serveur occupé, réessayez." });
-  }
+  // Le texte relevé dans le fil est la seule source possible : sans lui, le garde-fou
+  // anti-redite n'a pas de référence et la proposition peut répéter ce qui a déjà
+  // été dit. L'appelant en est averti par hadPreviousAnswer.
+  const previousAnswer = String(data.previousAnswerFromThread || '').trim();
 
-  try {
-    const sheet = getTrackingSheet_();
-    const existante = trouverLigneParUrl_(sheet, url);
+  const reply = generateFollowUp({
+    question: String(data.question || data.title || '').trim(),
+    previousAnswer: previousAnswer,
+    followUp: followUpText,
+    author: data.author || "Utilisateur",
+    product: data.product || "Google",
+    // Détermine le cadrage : réponse à une relance, ou première intervention
+    // sur un fil auquel un autre bénévole a déjà répondu.
+    peADejaRepondu: data.peADejaRepondu !== false,
+    apiKey: String(data.apiKey || '').trim()
+  });
 
-    if (existante !== -1) {
-      return jsonOutput_({ status: "success", message: "Thread déjà suivi.", row: existante, created: false });
-    }
-
-    const newId = Utilities.getUuid().substring(0, 8);
-    sheet.appendRow([
-      newId,
-      new Date(),
-      url,
-      data.product || "Inconnu",
-      data.title || "Titre inconnu",
-      data.content || "",
-      data.author || "Auteur inconnu",
-      "En attente (User)",
-      "",
-      "",
-      "Enregistré lors d'une relance (réponse initiale déjà publiée hors outil)",
-      ""
-    ]);
-
-    return jsonOutput_({ status: "success", message: "Thread enregistré.", id: newId, row: sheet.getLastRow(), created: true });
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-/**
- * Compose la note de suivi en y intégrant le niveau de fiabilité de la réponse générée.
- * C'est ce qui permet de repérer d'un coup d'œil, dans la feuille, les propositions
- * à reprendre entièrement à la main avant publication.
- *
- * @param {string} origin Provenance de la ligne (extension, WebApp mobile...)
- * @param {Object} reply L'objet renvoyé par generateReply
- * @returns {string} La note à inscrire en colonne Notes
- */
-function buildNote_(origin, reply) {
-  if (!reply || !reply.status) return origin;
-
-  const labels = {
-    REPONSE: "réponse proposée",
-    CLARIFICATION: "⚠️ à clarifier — informations insuffisantes",
-    HORS_SUJET: "⚠️ hors sujet",
-    ERREUR: "❌ échec de génération"
-  };
-
-  const parts = [origin, labels[reply.status] || reply.status];
-  if (reply.confidence && reply.status === 'REPONSE') {
-    parts.push("confiance " + reply.confidence.toLowerCase());
-  }
-  if (reply.uiPathUnsourced) {
-    parts.push("⚠️ chemin d'interface non sourcé — vérifier les libellés de menus");
-  }
-  if (reply.truncated) {
-    parts.push("❌ réponse incomplète — génération interrompue, à reprendre");
-  }
-
-  return parts.join(" • ");
+  return jsonOutput_({
+    status: reply.ok ? "success" : "error",
+    message: reply.ok ? "Proposition générée." : reply.text,
+    summary: reply.text || "",
+    suite: reply.suite,
+    confidence: reply.confidence,
+    nothingToAdd: reply.suite === 'RIEN_A_AJOUTER',
+    repeatsPrevious: !!reply.repeatsPrevious,
+    overlap: reply.overlap || 0,
+    truncated: !!reply.truncated,
+    hadPreviousAnswer: !!previousAnswer
+  });
 }
 
 /**
@@ -432,140 +167,4 @@ function doGet(e) {
     .setFaviconUrl('https://www.gstatic.com/images/branding/product/1x/sheets_48dp.png')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
-}
-
-/**
- * Traite une relance : la personne a répondu après le message du Product Expert.
- *
- * Le contexte est reconstitué depuis la feuille — question d'origine et réponse
- * effectivement publiée — de sorte que le modèle sache précisément ce qui a déjà
- * été dit et ne le reformule pas.
- *
- * @param {Object} data La charge utile reçue (url, followUpText)
- * @returns {GoogleAppsScript.Content.TextOutput}
- */
-function handleFollowUp_(data) {
-  const url = String(data.url || '').trim();
-  const followUpText = String(data.followUpText || '').trim();
-
-  if (!url || !followUpText) {
-    return jsonOutput_({ status: "error", message: "URL du thread ou message de relance manquant." });
-  }
-
-  const sheet = getTrackingSheet_();
-  const targetRow = trouverLigneParUrl_(sheet, url);
-
-  if (targetRow === -1) {
-    // L'extension enchaîne automatiquement sur un enregistrement léger puis réessaie
-    return jsonOutput_({
-      status: "error",
-      code: "untracked",
-      message: "Ce thread n'est pas encore suivi."
-    });
-  }
-
-  const ligne = sheet.getRange(targetRow, 1, 1, CONFIG.COLUMNS.length).getValues()[0];
-  const idx = (n) => ligne[n - 1];
-
-  // La réponse réellement publiée prime sur la proposition : c'est ce que la personne a lu.
-  // En dernier recours, le texte relevé dans le fil par l'extension : une réponse rédigée
-  // hors de l'outil n'a laissé aucune trace dans la feuille, mais figure bien sur le forum.
-  const depuisFeuille = String(idx(CONFIG.COL.PUBLISHED) || idx(CONFIG.COL.SUMMARY) || '').trim();
-  const depuisFil = String(data.previousAnswerFromThread || '').trim();
-  const previousAnswer = depuisFeuille || depuisFil;
-
-  const reply = generateFollowUp({
-    question: idx(CONFIG.COL.QUESTION) || idx(CONFIG.COL.TITLE),
-    previousAnswer: previousAnswer,
-    followUp: followUpText,
-    author: idx(CONFIG.COL.AUTHOR),
-    product: idx(CONFIG.COL.PRODUCT),
-    // Comme pour la génération initiale : la clé transmise sert à cette requête et
-    // n'est pas persistée. Elle est indispensable quand la clé n'est configurée que
-    // dans l'extension et non dans le panneau de contrôle.
-    apiKey: String(data.apiKey || '').trim(),
-    // Détermine le cadrage : réponse à une relance, ou première intervention
-    // sur un fil auquel un autre bénévole a déjà répondu.
-    peADejaRepondu: data.peADejaRepondu !== false
-  });
-
-  const lock = LockService.getScriptLock();
-  if (!lock.tryLock(15000)) {
-    return jsonOutput_({ status: "error", code: "busy", message: "Serveur occupé, réessayez.", summary: reply.text });
-  }
-
-  try {
-    // Une réponse rédigée entièrement à la main, absente de la feuille, est le meilleur
-    // exemple de style qui soit : elle est intégralement de la plume du Product Expert.
-    // On la conserve, ce qui amorce le corpus depuis des fils traités hors de l'outil.
-    if (!depuisFeuille && depuisFil) {
-      sheet.getRange(targetRow, CONFIG.COL.PUBLISHED).setValue(depuisFil);
-      invalidateStyleExamplesCache_();
-    }
-
-    // La proposition courante remplace le contenu de la colonne d'action ;
-    // la réponse déjà publiée reste conservée en colonne « Réponse publiée ».
-    if (reply.text) {
-      sheet.getRange(targetRow, CONFIG.COL.SUMMARY).setRichTextValue(formatMarkdownToRichText(reply.text));
-    }
-
-    // Cette colonne, jusqu'ici inexploitée, prend enfin son sens
-    sheet.getRange(targetRow, CONFIG.COL.FOLLOWUP).setValue(new Date());
-    sheet.getRange(targetRow, CONFIG.COL.STATUS).setValue(
-      reply.suite === 'RESOLU' ? "Résolue" : "En attente (User)"
-    );
-    sheet.getRange(targetRow, CONFIG.COL.NOTES).setValue(buildFollowUpNote_(reply, data.locked));
-  } finally {
-    lock.releaseLock();
-  }
-
-  return jsonOutput_({
-    status: "success",
-    row: targetRow,
-    summary: reply.text || "",
-    suite: reply.suite,
-    confidence: reply.confidence,
-    nothingToAdd: reply.suite === 'RIEN_A_AJOUTER',
-    repeatsPrevious: !!reply.repeatsPrevious,
-    overlap: reply.overlap || 0,
-    truncated: !!reply.truncated,
-    hadPreviousAnswer: !!previousAnswer,
-    // Précise d'où vient le contexte, pour que l'avertissement reste juste
-    previousAnswerSource: depuisFeuille ? 'feuille' : (depuisFil ? 'fil' : 'aucune')
-  });
-}
-
-/**
- * Compose la note de suivi d'une relance.
- * @param {Object} reply L'objet renvoyé par generateFollowUp
- * @param {boolean} [locked] true si le fil est verrouillé, totalement ou en partie
- * @returns {string} La note à inscrire
- */
-function buildFollowUpNote_(reply, locked) {
-  const labels = {
-    RESOLU: "✅ résolu — remerciement",
-    ECHEC: "⚠️ la solution n'a pas fonctionné",
-    INCOMPRIS: "point incompris à reformuler",
-    NOUVEAU: "élément nouveau au dossier",
-    HORS_SUJET: "⚠️ relance hors sujet",
-    RIEN_A_AJOUTER: "rien à ajouter à la réponse existante",
-    ERREUR: "❌ échec de génération"
-  };
-
-  const parts = ["Relance", labels[reply.suite] || reply.suite];
-
-  if (reply.repeatsPrevious) {
-    parts.push("⚠️ redit " + reply.overlap + " % de la réponse précédente — à réécrire");
-  }
-  if (reply.truncated) {
-    parts.push("❌ réponse incomplète");
-  }
-  if (reply.confidence && reply.suite !== 'RESOLU') {
-    parts.push("confiance " + String(reply.confidence).toLowerCase());
-  }
-  if (locked) {
-    parts.push("🔒 fil verrouillé — seuls les Experts Produit et l'auteur peuvent répondre");
-  }
-
-  return parts.join(" • ");
 }

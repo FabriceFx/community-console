@@ -3,9 +3,9 @@
  */
 
 /**
- * Reçoit l'URL d'un thread soumise depuis l'interface mobile, extrait les informations côté serveur
- * via UrlFetchApp, génère la proposition de réponse Gemini, enregistre la ligne dans Google Sheets
- * et retourne le message formaté au mobile.
+ * Reçoit l'URL d'un thread soumise depuis l'interface mobile, extrait les informations côté
+ * serveur via UrlFetchApp, génère la proposition de réponse Gemini et la retourne au mobile.
+ * Rien n'est conservé : ni la question, ni la réponse.
  *
  * @param {string} threadUrl L'URL complète du thread Google Community Console
  * @param {string} [providedAuthor] Prénom ou nom de l'auteur fourni manuellement
@@ -124,48 +124,13 @@ function processMobileThreadUrl(threadUrl, providedAuthor, providedContent, prov
     author = "Utilisateur inconnu";
   }
 
-  // 7. Générer la proposition de réponse
+  // 7. Générer la proposition de réponse, sans rien conserver
   const reply = generateReply(content, author, product);
   const summary = reply.text || "";
-
-  // 8. Enregistrer la ligne sous verrou
-  const lock = LockService.getScriptLock();
-  if (!lock.tryLock(15000)) {
-    throw new Error("Le serveur traite déjà une autre demande. Réessayez dans quelques secondes.");
-  }
-
-  const newId = Utilities.getUuid().substring(0, 8);
-
-  try {
-    const sheet = getTrackingSheet_();
-
-    sheet.appendRow([
-      newId,
-      new Date(),
-      cleanUrl,
-      product,
-      title,
-      content,
-      author,
-      CONFIG.STATUSES[0], // "Nouvelle"
-      "",
-      "",
-      buildNote_("Ajouté via WebApp Mobile (iPhone)", reply),
-      "" // Réponse publiée, non applicable depuis le mobile
-    ]);
-
-    const row = sheet.getLastRow();
-    if (summary) {
-      sheet.getRange(row, CONFIG.COL.SUMMARY).setRichTextValue(formatMarkdownToRichText(summary));
-    }
-  } finally {
-    lock.releaseLock();
-  }
 
   return {
     status: "success",
     backendVersion: CONFIG.VERSION,
-    id: newId,
     title: title,
     author: author,
     product: product,

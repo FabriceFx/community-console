@@ -2,6 +2,39 @@
 
 Toutes les modifications notables apportées à ce projet sont documentées dans ce fichier.
 
+## [1.13.0] - 2026-09-02
+
+### 🗑️ Suppression du suivi Google Sheets : l'outil ne conserve plus rien
+
+> **« Je n'ai jamais retouché une proposition de Gemini. »**
+> Cette phrase a réglé la question du corpus de style : `recordPublishedReply_` n'enregistrait une réponse qu'au-delà de 5 % de réécriture (`MIN_EDIT_RATIO`). En deçà, elle était explicitement écartée. Le corpus était donc **toujours vide**, et la section `EXEMPLES DU STYLE RÉEL` n'a jamais été insérée dans un seul prompt. Toute la mécanique de la boucle de retour tournait à vide.
+
+L'outil devient sans état : chaque fil est analysé, une proposition est renvoyée, et rien n'est gardé. Le classeur Google Sheets subsiste uniquement pour porter le panneau de réglages — la WebApp mobile a besoin de la clé API côté serveur, et `SpreadsheetApp.getUi()` d'un classeur pour s'afficher.
+
+**Ce qui disparaît (environ 1 100 lignes) :**
+- **Feuille de suivi** : `CONFIG.SHEET_NAME`, `COLUMNS`, `COL`, `STATUSES`, `getTrackingSheet_`, `ensureColumns_`, `setupSheet`, et les entrées de menu « Initialiser la feuille » et « Relancer l'analyse (ligne sélectionnée) ».
+- **Boucle d'apprentissage du style** : `getStyleExamples_`, `buildStyleExamplesSection_`, `stripReplyShell_`, `invalidateStyleExamplesCache_`, `recordPublishedReply_`, et côté extension `enregistrerReponsePubliee`, `estBoutonPublier` et la détection du clic sur « Publier ».
+- **Rendu Google Sheets** : `formatMarkdownToRichText` (120 lignes) n'avait plus de destination.
+- **Rapprochement de lignes** : `trouverLigneParUrl_`, `normaliserUrlFil_`, `registerThreadOnly_` et le repli « fil non suivi » de l'extension. Le correctif d'identité des fils livré en 1.12.6 n'a plus d'objet : il n'y a plus de ligne à retrouver.
+- **Verrous** : `LockService` n'a plus rien à sérialiser.
+
+**Ce qui change de source :**
+- **Contexte des relances** : la question d'origine et votre réponse précédente accompagnent désormais la demande (`question`, `previousAnswerFromThread`). C'est la source la plus fiable — elle reflète le fil tel qu'il est, y compris les messages rédigés hors de l'outil, que la feuille pouvait ignorer.
+- **Garde-fou anti-redite** : il s'applique dès que votre message est localisé dans le fil. Quand il ne l'est pas, l'extension le dit explicitement au lieu de laisser croire à une vérification qui n'a pas eu lieu. Renseigner votre nom d'affichage dans les options rend ce cas rare.
+
+**Libellés remis en accord avec ce que fait l'outil :**
+- « 📌 Suivre dans Sheets » devient « ✍️ Proposer une réponse » ; « Envoyé & Réponse placée » devient « Réponse placée ».
+- WebApp mobile : « 🚀 Analyser & Suivre » devient « 🚀 Analyser le fil », et le sous-titre annonce que rien n'est conservé.
+
+**Tests — 24 suites, toutes vertes :**
+- `21-backend-sans-etat` remplace `21-backend-dopost`. Son bac à sable ne fournit **ni `SpreadsheetApp` ni `LockService`** : toute tentative d'écriture lèverait une exception. C'est le contrôle structurel le plus solide contre une réintroduction du stockage.
+- `05-detection-retouche` devient `05-mesure-de-recouvrement` : `tauxDeModification_` subsiste, mais au service du seul garde-fou anti-redite.
+- `03-sources-et-boucle-retour` devient `03-sources-officielles`, amputé de ses sections sur la boucle de retour.
+- `14-cablage-boutons` interdit le retour de neuf symboles liés au stockage et vérifie que le contexte du fil accompagne bien la relance.
+- Supprimées, sans objet : `04-detection-publication`, `19-repechage-reponse`, `20-formatage-richtext`, `25-identite-du-fil`.
+
+**Reste à faire, hors périmètre de cette version** : `appsscript.json` demande encore le champ d'application `spreadsheets.currentonly`. Le script ne lit ni n'écrit plus la moindre cellule ; ce champ pourrait être retiré, mais l'effet sur `SpreadsheetApp.getUi()` doit être vérifié sur un déploiement réel avant de le faire.
+
 ## [1.12.8] - 2026-09-02
 
 ### 🧹 Retrait du bouton « Enregistrer ma version »

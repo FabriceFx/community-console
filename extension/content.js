@@ -69,103 +69,6 @@ function estVisible(el) {
   return style.visibility !== 'hidden' && style.display !== 'none';
 }
 
-// Libellés du bouton qui publie effectivement le message.
-// « Répondre » / « Reply » en sont volontairement absents : dans la Community Console,
-// ce bouton OUVRE l'éditeur, il ne publie pas — c'est même celui que injecterReponse()
-// clique par programme. L'y inclure enregistrerait comme publiés des textes qui ne le sont pas.
-const LIBELLES_PUBLICATION = [
-  'publier',
-  'envoyer',
-  'poster',
-  'publish',
-  'post',
-  'send',
-  'submit'
-];
-
-// Libellés à écarter même s'ils contiennent un mot de publication
-const LIBELLES_EXCLUS = /annul|cancel|brouillon|draft|supprim|delete|aperçu|preview|modifier|edit\b/;
-
-/**
- * Détermine si un élément cliqué correspond au bouton de publication du forum.
- *
- * On exige que le libellé COMMENCE par un verbe de publication, plutôt que de le
- * contenir : « Publier » et « Publier la réponse » sont acceptés, « Répondre à ce
- * message » ou « Signaler ce post » ne le sont pas.
- *
- * @param {HTMLElement} el L'élément cliqué
- * @returns {boolean}
- */
-function estBoutonPublier(el) {
-  const texte = (el.innerText || el.textContent || '').trim().toLowerCase();
-  const aria = (el.getAttribute('aria-label') || '').trim().toLowerCase();
-
-  return [texte, aria].some((label) => {
-    if (!label || label.length > 40) return false;
-    if (LIBELLES_EXCLUS.test(label)) return false;
-
-    return LIBELLES_PUBLICATION.some((verbe) =>
-      label === verbe || label.startsWith(verbe + ' ')
-    );
-  });
-}
-
-/**
- * Enregistre dans Google Sheets le texte réellement publié sur le forum.
- *
- * C'est la boucle de retour : l'écart entre la proposition de Gemini et le message
- * finalement publié est ce qui décrit le mieux le style du Product Expert. Ces réponses
- * sont ensuite réinjectées dans le prompt comme exemples, et l'outil s'aligne peu à peu.
- *
- * Une réponse publiée sans retouche n'est pas conservée : elle n'apprendrait au modèle
- * que sa propre production, dont les tics se renforceraient à chaque génération. Le
- * backend compare le texte publié à la proposition et ne garde que ce qui a été réécrit.
- *
- * @param {string} text Le texte final présent dans l'éditeur au moment de la publication
- * @returns {Promise<{ok: boolean, modified: boolean, editRatio: number}>}
- */
-async function enregistrerReponsePubliee(text) {
-  const echec = { ok: false, modified: false, editRatio: 0 };
-
-  const propre = (text || '').trim();
-  if (propre.length < 40) return echec;
-
-  try {
-    const config = await getStorage(['webappUrl', 'sharedSecret']);
-    if (!config.webappUrl || !config.sharedSecret) return echec;
-
-    const response = await sendMessage({
-      action: 'sendToWebapp',
-      webappUrl: config.webappUrl,
-      payload: {
-        action: 'recordPublished',
-        url: window.location.href,
-        publishedText: propre,
-        secret: config.sharedSecret
-      }
-    });
-
-    const data = (response && response.success) ? response.data : null;
-    verifierVersionBackend(data);
-    const ok = !!(data && data.status === 'success');
-
-    if (ok) {
-      // `modified: false` = proposition reprise telle quelle : rien n'est stocké, et
-      // rien n'alimente le style — une réponse non retouchée n'apprend rien au modèle.
-      console.log(data.modified
-        ? `📝 Réponse retouchée enregistrée (${data.editRatio} % réécrit) : elle servira d'exemple de style.`
-        : '📝 Proposition publiée telle quelle : rien à apprendre, rien de stocké.');
-    } else {
-      console.log('📝 Enregistrement non abouti :', response);
-    }
-
-    return { ok: ok, modified: !!(data && data.modified), editRatio: data ? data.editRatio : 0 };
-  } catch (e) {
-    console.warn("Enregistrement de la réponse publiée impossible :", e);
-    return { ok: false, modified: false, editRatio: 0 };
-  }
-}
-
 let alerteVersionAffichee = false;
 
 /**
@@ -202,15 +105,9 @@ function verifierVersionBackend(data) {
   );
 }
 
-// Surveillance de la publication.
-// Écoute en phase de capture : le contenu de l'éditeur doit être lu AVANT que le forum
-// ne vide le champ. Rien n'est publié par l'extension, on ne fait qu'observer.
-let dernierTexteCapture = '';
-
 // Dernier contenu connu de l'éditeur.
-// Indispensable : une fois le message publié, le forum retire l'éditeur du DOM. La lecture
-// se fait en phase de capture, avant que le champ ne soit vidé, mais cette mémoire couvre
-// les cas où l'éditeur a déjà disparu. Elle sert aussi de référence à la relance.
+// Seul usage restant : servir de repère au traitement d'une relance, quand votre message
+// doit être localisé dans le fil par recouvrement de mots. Rien n'en sort de la page.
 let contenuEditeurMemorise = '';
 
 /**
@@ -225,26 +122,8 @@ function lireTexteEditeur(el) {
 }
 
 /**
- * Choisit le meilleur texte disponible entre l'éditeur encore présent à l'écran
- * et le dernier contenu mémorisé.
- *
- * @param {string} texteLive Texte lu dans l'éditeur au moment du clic ('' s'il a disparu)
- * @param {string} texteMemorise Dernier contenu connu de l'éditeur
- * @returns {string} Le texte à enregistrer, ou '' si aucun n'est exploitable
- */
-function choisirTexteACapturer(texteLive, texteMemorise) {
-  const live = String(texteLive || '').trim();
-  const memo = String(texteMemorise || '').trim();
-
-  // L'éditeur vidé après publication ne doit pas écraser ce que l'on avait mémorisé
-  if (live.length >= 40) return live;
-  if (memo.length >= 40) return memo;
-  return '';
-}
-
-/**
  * Mémorise en continu le contenu de la zone de réponse pendant la saisie.
- * C'est ce qui permet d'enregistrer la version finale même après sa publication.
+ * Sert de repère pour situer votre message dans le fil lors d'une relance.
  */
 document.addEventListener('input', (event) => {
   const el = event.target;
@@ -261,18 +140,6 @@ document.addEventListener('input', (event) => {
   if (texte.length >= 40) {
     contenuEditeurMemorise = texte;
   }
-}, true);
-
-document.addEventListener('click', (event) => {
-  const cible = event.target.closest ? event.target.closest('button, [role="button"], a, input[type="submit"]') : null;
-  if (!cible || cible.id === 'pe-tracker-btn') return;
-  if (!estBoutonPublier(cible)) return;
-
-  const texte = choisirTexteACapturer(lireTexteEditeur(trouverEditeurReponse()), contenuEditeurMemorise);
-  if (!texte || texte === dernierTexteCapture) return;
-
-  dernierTexteCapture = texte;
-  enregistrerReponsePubliee(texte);
 }, true);
 
 /**
@@ -1122,7 +989,7 @@ function creerBoutonRelance(premiereIntervention) {
     const isolation = isolerRelanceStructuree(
       messages,
       config.peDisplayName,
-      contenuEditeurMemorise || dernierTexteCapture
+      contenuEditeurMemorise
     );
 
     if (!isolation.messages.length) {
@@ -1154,66 +1021,23 @@ function creerBoutonRelance(premiereIntervention) {
         webappUrl: config.webappUrl,
         payload: {
           action: 'followUp',
-          url: window.location.href,
           followUpText: relance.substring(0, MAX_CONTENT),
-          locked: filVerrouille(),
           peADejaRepondu: !premiereIntervention,
-          // Repêchage : si la feuille n'a pas gardé trace de la réponse publiée,
-          // le fil, lui, la contient toujours.
+          // Le backend ne conserve rien : tout le contexte du fil part avec la demande.
+          // La question d'origine est le premier message, votre réponse celle repérée
+          // par isolerRelanceStructuree. C'est la source la plus fiable qui soit — elle
+          // reflète le fil tel qu'il est, y compris les messages écrits hors de l'outil.
+          question: messages[0] ? messages[0].text.substring(0, MAX_CONTENT) : '',
           previousAnswerFromThread: isolation.messagePe ? isolation.messagePe.text.substring(0, MAX_CONTENT) : '',
+          author: demandeur || '',
+          product: extraireInfosThread().product,
           apiKey: config.geminiApiKey || '',
           secret: config.sharedSecret
         }
       });
 
-      let data = (response && response.success) ? response.data : null;
+      const data = (response && response.success) ? response.data : null;
       verifierVersionBackend(data);
-
-      // Fil pas encore suivi : on l'enregistre sans générer de réponse initiale
-      // (inutile ici, et coûteuse en quota), puis on relance le traitement.
-      if (data && data.code === 'untracked') {
-        btn.innerHTML = '⏳ Enregistrement du fil...';
-
-        const infos = extraireInfosThread();
-        const inscription = await sendMessage({
-          action: 'sendToWebapp',
-          webappUrl: config.webappUrl,
-          payload: {
-            action: 'registerOnly',
-            url: window.location.href,
-            title: infos.title,
-            author: demandeur || infos.author,
-            product: infos.product,
-            content: messages[0] ? messages[0].text.substring(0, MAX_CONTENT) : infos.content,
-            secret: config.sharedSecret
-          }
-        });
-
-        const okInscription = inscription && inscription.success && inscription.data && inscription.data.status === 'success';
-        if (!okInscription) {
-          alert("Impossible d'enregistrer ce fil : " + ((inscription && inscription.data) ? inscription.data.message : 'erreur inconnue'));
-          btn.innerHTML = libelleInitial;
-          btn.disabled = false;
-          return;
-        }
-
-        btn.innerHTML = '⏳ Analyse de la relance...';
-        const seconde = await sendMessage({
-          action: 'sendToWebapp',
-          webappUrl: config.webappUrl,
-          payload: {
-            action: 'followUp',
-            url: window.location.href,
-            followUpText: relance.substring(0, MAX_CONTENT),
-            locked: filVerrouille(),
-            peADejaRepondu: !premiereIntervention,
-            previousAnswerFromThread: isolation.messagePe ? isolation.messagePe.text.substring(0, MAX_CONTENT) : '',
-            apiKey: config.geminiApiKey || '',
-            secret: config.sharedSecret
-          }
-        });
-        data = (seconde && seconde.success) ? seconde.data : null;
-      }
 
       if (!data || data.status !== 'success') {
         alert("Échec : " + (data ? data.message : "réponse invalide du backend"));
@@ -1223,15 +1047,15 @@ function creerBoutonRelance(premiereIntervention) {
       }
 
       if (data.suite === 'RESOLU') {
-        alert("✅ Relance classée « résolue »\n\nLa personne confirme que c'est réglé. La proposition est un simple accusé de réception, et le suivi passe en « Résolue ».");
+        alert("✅ Relance classée « résolue »\n\nLa personne confirme que c'est réglé. La proposition est un simple accusé de réception.");
       }
       if (data.repeatsPrevious) {
         alert("⚠️ Redite détectée\n\nLa proposition reprend " + data.overlap + " % de votre réponse précédente. La personne vient justement d'indiquer que cela n'a pas fonctionné : réécrivez ce texte plutôt que de le publier.");
       }
       if (!data.hadPreviousAnswer) {
-        alert("ℹ️ Votre réponse précédente n'a pas pu être retrouvée\n\nNi dans la feuille, ni dans le fil. La proposition a donc été rédigée sans savoir ce que vous aviez déjà écrit : relisez-la attentivement pour éviter une redite.");
-      } else if (data.previousAnswerSource === 'fil') {
-        console.log("%c[PE Tracker] Réponse précédente relevée dans le fil et enregistrée dans la feuille.", 'color:#0f9d58');
+        // Sans référence, le garde-fou anti-redite ne peut pas fonctionner : l'avertissement
+        // est le seul filet restant. Renseigner votre nom d'affichage le rend très rare.
+        alert("ℹ️ Votre réponse précédente n'a pas pu être localisée dans le fil\n\nLa proposition a donc été rédigée sans savoir ce que vous aviez déjà écrit, et le contrôle anti-redite n'a pas pu s'appliquer. Relisez-la attentivement.");
       }
       if (data.truncated) {
         alert("❌ Réponse incomplète : ne publiez pas ce texte tel quel.");
@@ -1281,12 +1105,12 @@ function creerBoutonPrincipal() {
 
   const btn = document.createElement('button');
   btn.id = 'pe-tracker-btn';
-  btn.innerHTML = '📌 Suivre dans Sheets';
-  btn.title = "Envoyer ce thread vers votre Google Sheets et préparer la réponse";
+  btn.innerHTML = '✍️ Proposer une réponse';
+  btn.title = "Analyser ce fil et placer une proposition de réponse dans le champ d'édition";
   
   btn.addEventListener('click', async () => {
     btn.disabled = true;
-    btn.innerHTML = '⏳ Analyse Gemini & Envoi...';
+    btn.innerHTML = '⏳ Analyse Gemini...';
     
     try {
       const storageData = await getStorage(['webappUrl', 'geminiApiKey', 'sharedSecret']);
@@ -1297,14 +1121,14 @@ function creerBoutonPrincipal() {
       if (!webappUrl) {
         alert("Veuillez d'abord configurer l'URL de la WebApp Google Apps Script dans les options de l'extension (clic sur l'icône de l'extension dans Chrome).");
         btn.disabled = false;
-        btn.innerHTML = '📌 Suivre dans Sheets';
+        btn.innerHTML = '✍️ Proposer une réponse';
         return;
       }
 
       if (!sharedSecret) {
         alert("Secret partagé manquant.\n\nGénérez-le dans Google Sheets via « 🛠️ Suivi PE > Ouvrir le panneau de contrôle », puis recopiez-le dans les options de l'extension.");
         btn.disabled = false;
-        btn.innerHTML = '📌 Suivre dans Sheets';
+        btn.innerHTML = '✍️ Proposer une réponse';
         return;
       }
 
@@ -1340,7 +1164,7 @@ function creerBoutonPrincipal() {
           alert("Erreur de communication avec l'extension Chrome : " + (msgErr.message || msgErr));
         }
         btn.disabled = false;
-        btn.innerHTML = '📌 Suivre dans Sheets';
+        btn.innerHTML = '✍️ Proposer une réponse';
         return;
       }
 
@@ -1383,34 +1207,34 @@ function creerBoutonPrincipal() {
         const reponsePlacee = await injecterReponse(summaryText);
 
         if (reponsePlacee) {
-          btn.innerHTML = '✅ Envoyé & Réponse placée !';
+          btn.innerHTML = '✅ Réponse placée';
           btn.style.backgroundColor = '#0f9d58';
-          // Amorcer la mémoire avec le texte injecté : si le PE publie sans rien modifier,
-          // aucun événement `input` ne se déclenche et il n'y aurait rien à enregistrer.
+          // Amorcer la mémoire avec le texte injecté : elle sert de repère pour situer
+          // votre message dans le fil si une relance arrive ensuite.
           contenuEditeurMemorise = summaryText.trim();
         } else {
           try {
             await navigator.clipboard.writeText(summaryText);
-            btn.innerHTML = '✅ Envoyé (Réponse copiée 📋)';
+            btn.innerHTML = '✅ Réponse copiée 📋';
             btn.style.backgroundColor = '#0f9d58';
-            alert("Thread enregistré dans Sheets ! La réponse générée a été copiée dans votre presse-papier.");
+            alert("Le champ de réponse n'a pas pu être ouvert.\n\nLa proposition a été copiée dans votre presse-papier.");
           } catch (clipErr) {
-            btn.innerHTML = '✅ Envoyé dans Sheets !';
-            btn.style.backgroundColor = '#0f9d58';
+            btn.innerHTML = '⚠️ Réponse non placée';
+            btn.style.backgroundColor = '#f29900';
           }
         }
       } else {
-        btn.innerHTML = '✅ Envoyé dans Sheets !';
-        btn.style.backgroundColor = '#0f9d58';
+        btn.innerHTML = '⚠️ Aucune réponse générée';
+        btn.style.backgroundColor = '#f29900';
       }
 
     } catch (globalError) {
-      console.error("Erreur fatale dans le script de suivi :", globalError);
+      console.error("Erreur fatale dans le script de l'extension :", globalError);
       btn.innerHTML = '❌ Erreur Script';
       btn.style.backgroundColor = '#d93025';
     } finally {
       setTimeout(() => {
-        btn.innerHTML = '📌 Suivre dans Sheets';
+        btn.innerHTML = '✍️ Proposer une réponse';
         btn.style.backgroundColor = '';
         btn.disabled = false;
       }, 4000);

@@ -341,35 +341,11 @@ function tauxDeModification_(propose, publie) {
 }
 
 /**
- * Vide le cache des exemples de style (appelé après l'enregistrement d'une réponse publiée).
- */
-function invalidateStyleExamplesCache_() {
-  try {
-    CacheService.getScriptCache().remove('PE_STYLE_EXAMPLES');
-  } catch (e) {
-    // Cache indisponible : les exemples seront simplement relus à la prochaine génération
-  }
-}
-
-/**
- * Échappe les caractères spéciaux d'une chaîne destinée à une expression régulière.
- * La signature est saisie librement dans le panneau de contrôle : un point ou une
- * parenthèse y prendrait sinon son sens d'opérateur.
- *
- * @param {string} texte
- * @returns {string}
- */
-function echapperRegex_(texte) {
-  return String(texte === null || texte === undefined ? '' : texte).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/**
  * Appose la signature du Product Expert au bas d'un message.
  *
- * Elle est configurable depuis le panneau de contrôle et peut être vide. Elle était
- * auparavant codée en dur : quiconque installait l'outil signait ses réponses du
- * prénom de son auteur, et la boucle d'apprentissage du style ne reconnaissait plus
- * la fin de ses propres messages.
+ * Elle est configurable depuis le panneau de contrôle et peut être vide : tous les
+ * bénévoles ne signent pas leurs messages, et une valeur codée en dur signerait les
+ * réponses de quiconque installe l'outil du nom d'un seul.
  *
  * @param {Array<string>} blocs Les blocs du message, déjà séparés par des lignes vides
  * @returns {string} Le message complet, signé si une signature est configurée
@@ -377,116 +353,6 @@ function echapperRegex_(texte) {
 function apposerSignature_(blocs) {
   const signature = (typeof getSignature === 'function') ? getSignature() : '';
   return (signature ? blocs.concat(['', signature]) : blocs).join('\n');
-}
-
-/**
- * Retire de la coquille automatique (accueil, clôture, signature) le corps d'une réponse publiée.
- * Seul le corps a valeur d'exemple : la coquille est déjà générée par buildFormattedResponse,
- * et l'accueil contient le prénom de l'auteur, qui n'a rien à faire dans un prompt.
- *
- * @param {string} published Le message publié dans son intégralité
- * @returns {string} Le corps du message, débarrassé de son emballage
- */
-function stripReplyShell_(published) {
-  let lines = String(published || '').split('\n');
-
-  // Retirer la formule d'accueil initiale, quelle que soit la langue
-  while (lines.length && !lines[0].trim()) lines.shift();
-  if (lines.length && /^(bonjour|bonsoir|hi|hello|hallo|hola|ciao|salut)\b/i.test(lines[0].trim())) {
-    lines.shift();
-  }
-
-  // Retirer la signature finale et tout ce qui la suit.
-  // Sans signature configurée, il n'y a rien à repérer : le retrait de la dernière
-  // ligne non vide, juste en dessous, suffit à écarter la formule de clôture.
-  const signature = (typeof getSignature === 'function') ? getSignature() : '';
-  if (signature) {
-    const motifSignature = new RegExp('^' + echapperRegex_(signature) + '\\s*$', 'i');
-    for (let i = lines.length - 1; i >= 0; i--) {
-      if (motifSignature.test(lines[i].trim())) {
-        lines = lines.slice(0, i);
-        break;
-      }
-    }
-  }
-
-  // Retirer la phrase de clôture, systématiquement en dernière ligne non vide
-  while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
-  if (lines.length > 1) lines.pop();
-
-  return lines.join('\n').trim();
-}
-
-/**
- * Récupère les dernières réponses réellement publiées par le Product Expert,
- * pour les présenter au modèle comme exemples de style.
- *
- * C'est le levier le plus efficace contre le « ça sent l'IA » : une consigne décrit
- * ce qu'il faut éviter, un exemple montre comment la personne écrit vraiment.
- * Le corpus s'enrichit tout seul à mesure que le PE publie.
- *
- * @returns {Array<string>} Les corps de messages publiés, du plus récent au plus ancien
- */
-function getStyleExamples_() {
-  let cache = null;
-  try {
-    cache = CacheService.getScriptCache();
-    const cached = cache.get('PE_STYLE_EXAMPLES');
-    if (cached) return JSON.parse(cached);
-  } catch (e) {
-    // Cache indisponible : lecture directe de la feuille
-  }
-
-  const examples = [];
-
-  try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.SHEET_NAME);
-    if (!sheet) return examples;
-
-    const lastRow = sheet.getLastRow();
-    if (lastRow < 2 || sheet.getLastColumn() < CONFIG.COL.PUBLISHED) return examples;
-
-    const values = sheet.getRange(2, CONFIG.COL.PUBLISHED, lastRow - 1, 1).getValues();
-
-    for (let i = values.length - 1; i >= 0 && examples.length < CONFIG.STYLE_EXAMPLES_COUNT; i--) {
-      const body = stripReplyShell_(values[i][0]);
-      // Une réponse très courte n'apprend rien au modèle sur un style d'écriture
-      if (body.length < 80) continue;
-      // Les exemples traversent le prompt : ils sont expurgés comme le reste
-      examples.push(sanitizePii(body).substring(0, 900));
-    }
-  } catch (e) {
-    console.warn("Lecture des exemples de style impossible : " + redactSecrets_(e));
-  }
-
-  try {
-    if (cache) cache.put('PE_STYLE_EXAMPLES', JSON.stringify(examples), 1800);
-  } catch (e) {
-    // Sans cache, la feuille sera relue à chaque génération
-  }
-
-  return examples;
-}
-
-/**
- * Construit la section d'exemples de style à insérer dans les instructions système.
- * @returns {string} La section, ou une chaîne vide si aucun exemple n'est disponible
- */
-function buildStyleExamplesSection_() {
-  const examples = getStyleExamples_();
-  if (!examples.length) return '';
-
-  const blocks = examples.map(function (example, index) {
-    return `Exemple ${index + 1} :\n"""\n${example}\n"""`;
-  }).join('\n\n');
-
-  return `
-
-EXEMPLES DU STYLE RÉEL DE CE PRODUCT EXPERT — À IMITER EN PRIORITÉ
-Voici ${examples.length === 1 ? 'un message' : 'des messages'} qu'il a réellement publié${examples.length === 1 ? '' : 's'} sur le forum. C'est la référence : longueur, rythme des phrases, niveau de détail, façon d'aller au but, manière de nuancer. Ces exemples priment sur toute description de style donnée plus haut.
-N'en recopie ni le contenu technique ni les tournures mot pour mot : seule la manière d'écrire est à reprendre.
-
-${blocks}`;
 }
 
 /**
@@ -575,7 +441,7 @@ Ce lien ne remplace pas la réponse : il la termine. Un message qui se limiterai
 Adapte la phrase qui l'introduit au cas de la personne :
 - si elle n'a pas encore tenté la procédure, indique-lui de la suivre depuis un appareil et un lieu qu'elle utilise habituellement pour ce compte, et de répondre à un maximum de questions même approximativement ;
 - si elle indique l'avoir déjà tentée sans succès, dis-le clairement : c'est malgré tout la seule voie possible, et la réessayer depuis un appareil déjà utilisé pour se connecter à ce compte, sur son réseau habituel, augmente réellement les chances d'aboutir ;
-- si les éléments montrent que la récupération est sans issue, indique que la procédure reste le seul recours mais qu'elle a peu de chances d'aboutir en l'état, plutôt que de laisser espérer.` + buildStyleExamplesSection_();
+- si les éléments montrent que la récupération est sans issue, indique que la procédure reste le seul recours mais qu'elle a peu de chances d'aboutir en l'état, plutôt que de laisser espérer.`;
 }
 
 /**
@@ -701,7 +567,7 @@ STYLE
 - 120 mots maximum. 40 mots maximum en cas RESOLU.
 - Tout est rédigé dans la langue employée par la personne. Les gabarits ci-dessus sont en français pour t'être expliqués : ce sont des consignes, jamais des phrases à recopier.
 - Pas de « Voici les étapes à suivre », « En résumé », « Il est important de noter que », « N'hésitez pas à », « Je comprends votre frustration », pas de titres en gras, pas d'emoji, pas de séparateurs.
-- Une source du Centre d'aide uniquement si elle apporte un élément NOUVEAU, et seulement si googleSearch l'a réellement renvoyée. Ne recite pas le lien déjà fourni précédemment.` + buildStyleExamplesSection_();
+- Une source du Centre d'aide uniquement si elle apporte un élément NOUVEAU, et seulement si googleSearch l'a réellement renvoyée. Ne recite pas le lien déjà fourni précédemment.`;
 }
 
 /**
@@ -1342,119 +1208,6 @@ function listGeminiModels() {
   } catch (e) {
     throw new Error("Impossible de lister les modèles : " + redactSecrets_(e));
   }
-}
-
-/**
- * Convertit le texte markdown généré par Gemini en RichTextValue pour Google Sheets.
- * Gère le gras (**), les liens markdown [Libellé](URL), nettoie les séparateurs (---), guillemets doublés ("") et backticks (`).
- * @param {string} text Le texte markdown
- * @returns {GoogleAppsScript.Spreadsheet.RichTextValue} La valeur formatée
- */
-function formatMarkdownToRichText(text) {
-  if (!text) return SpreadsheetApp.newRichTextValue().setText("").build();
-
-  // 1. Supprimer tous les backticks (`) et corriger les guillemets doublés ("")
-  let processedText = text.replace(/`/g, '').replace(/""/g, '"');
-
-  // 2. Supprimer les lignes de séparation Markdown (---, ___, ***)
-  processedText = processedText.replace(/^[\s\-_*]{3,}$/gm, '');
-
-  // 3. Transformer les titres markdown (### Titre) en gras (**Titre**)
-  processedText = processedText.replace(/^#+\s*(.*)$/gm, '**$1**');
-
-  // 4. Remplacer les listes à puces markdown (*) par des tirets (-)
-  processedText = processedText.replace(/^(\s*)\*\s+/gm, '$1- ');
-
-  // 5. Nettoyer les sauts de ligne multiples consécutifs (plus de 2 de suite)
-  processedText = processedText.replace(/\n{3,}/g, '\n\n');
-
-  // Expression régulière pour capturer :
-  // Groupe 1: **[label](url)** (Gras + Lien)
-  // Groupe 2/3: label/url de Groupe 1
-  // Groupe 4: [label](url) (Lien seul)
-  // Groupe 5/6: label/url de Groupe 4
-  // Groupe 7: **texte** (Gras seul)
-  // Groupe 8: texte de Groupe 7
-  // Groupe 9: URL brute (https://...)
-  const combinedRegex = /(\*\*\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)\*\*)|(\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\))|(\*\*([^*]+)\*\*)|(https?:\/\/[^\s\)\],]+)/g;
-
-  let finalString = "";
-  let boldRanges = [];
-  let linkRanges = [];
-  let currentPos = 0;
-  let lastIndex = 0;
-  let match;
-
-  while ((match = combinedRegex.exec(processedText)) !== null) {
-    // Ajouter le texte brut situé avant le motif
-    const plainBefore = processedText.substring(lastIndex, match.index);
-    if (plainBefore.length > 0) {
-      finalString += plainBefore;
-      currentPos += plainBefore.length;
-    }
-
-    let displayText = "";
-    let isBold = false;
-    let linkUrl = null;
-    let linkEnd = null;
-
-    if (match[1]) {
-      // **[label](url)** -> Gras + Lien
-      displayText = match[2];
-      linkUrl = match[3];
-      isBold = true;
-    } else if (match[4]) {
-      // [label](url) -> Lien seul
-      displayText = match[5];
-      linkUrl = match[6];
-    } else if (match[7]) {
-      // **texte** -> Gras seul
-      displayText = match[8];
-      isBold = true;
-    } else if (match[9]) {
-      // URL brute -> Lien cliquable sur l'URL sans la ponctuation finale de phrase
-      const rawUrl = match[9];
-      const trailing = (rawUrl.match(/[.,;:!?]+$/) || [''])[0];
-      const bareUrl = trailing ? rawUrl.slice(0, -trailing.length) : rawUrl;
-      displayText = rawUrl;
-      linkUrl = bareUrl;
-      linkEnd = currentPos + bareUrl.length;
-    }
-
-    const start = currentPos;
-    const end = currentPos + displayText.length;
-
-    finalString += displayText;
-    currentPos += displayText.length;
-
-    if (isBold) {
-      boldRanges.push([start, end]);
-    }
-    if (linkUrl) {
-      linkRanges.push([start, linkEnd || end, linkUrl]);
-    }
-
-    lastIndex = combinedRegex.lastIndex;
-  }
-
-  // Ajouter le reste du texte
-  const remaining = processedText.substring(lastIndex);
-  if (remaining.length > 0) {
-    finalString += remaining;
-  }
-
-  const builder = SpreadsheetApp.newRichTextValue().setText(finalString);
-  const boldStyle = SpreadsheetApp.newTextStyle().setBold(true).build();
-
-  for (let i = 0; i < boldRanges.length; i++) {
-    builder.setTextStyle(boldRanges[i][0], boldRanges[i][1], boldStyle);
-  }
-
-  for (let i = 0; i < linkRanges.length; i++) {
-    builder.setLinkUrl(linkRanges[i][0], linkRanges[i][1], linkRanges[i][2]);
-  }
-
-  return builder.build();
 }
 
 /**

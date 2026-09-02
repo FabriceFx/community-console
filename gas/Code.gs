@@ -1,5 +1,9 @@
 /**
- * @fileoverview Logique principale d'initialisation et menu
+ * @fileoverview Menu du classeur.
+ *
+ * Le classeur n'héberge plus de feuille de suivi : il ne sert qu'à porter le panneau
+ * de réglages, dont la WebApp mobile a besoin côté serveur. D'où la disparition des
+ * entrées « Initialiser la feuille » et « Relancer l'analyse (ligne sélectionnée) ».
  */
 
 /**
@@ -11,147 +15,9 @@ function onOpen() {
   ui.createMenu('🛠️ Suivi PE')
     .addItem('Ouvrir le panneau de contrôle', 'showSidebar')
     .addItem('Lister les modèles Gemini disponibles', 'showAvailableModels')
-    .addItem('Relancer l\'analyse Gemini (Ligne sél.)', 'relaunchGemini')
     .addSeparator()
-    .addItem('Initialiser la feuille (Créer les colonnes)', 'setupSheet')
     .addItem('À propos', 'showAbout')
     .addToUi();
-}
-
-/**
- * Initialise la feuille de suivi avec les bonnes colonnes et validations.
- * @param {GoogleAppsScript.Spreadsheet.Sheet} [targetSheet] Feuille optionnelle à initialiser
- * @param {boolean} [isSilent=false] Si true, ne tente pas d'afficher de boîte de dialogue UI (contexte WebApp/Trigger)
- * @returns {GoogleAppsScript.Spreadsheet.Sheet} La feuille initialisée
- */
-function setupSheet(targetSheet, isSilent = false) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = targetSheet || ss.getSheetByName(CONFIG.SHEET_NAME);
-  
-  if (!sheet) {
-    sheet = ss.insertSheet(CONFIG.SHEET_NAME);
-  }
-  
-  // Ajouter les en-têtes si vides
-  const currentHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn() || 1).getValues()[0];
-  if (!currentHeaders || currentHeaders[0] === "") {
-    sheet.getRange(1, 1, 1, CONFIG.COLUMNS.length).setValues([CONFIG.COLUMNS]);
-    sheet.getRange(1, 1, 1, CONFIG.COLUMNS.length).setFontWeight("bold").setBackground("#e0e0e0");
-    sheet.setFrozenRows(1);
-    
-    // Formater la colonne ID en gras
-    sheet.getRange("A:A").setFontWeight("bold");
-    
-    // Mettre en place la validation de données pour le statut
-    const statusColIndex = CONFIG.COLUMNS.indexOf("Statut") + 1;
-    if (statusColIndex > 0) {
-      const rule = SpreadsheetApp.newDataValidation()
-        .requireValueInList(CONFIG.STATUSES, true)
-        .build();
-      sheet.getRange(2, statusColIndex, 1000, 1).setDataValidation(rule);
-    }
-    
-    // Ajuster la largeur des colonnes
-    sheet.setColumnWidth(2, 120); // Date
-    sheet.setColumnWidth(3, 300); // URL
-    sheet.setColumnWidth(4, 120); // Produit
-    sheet.setColumnWidth(5, 400); // Titre
-    sheet.setColumnWidth(6, 400); // Question
-    sheet.setColumnWidth(7, 150); // Auteur
-    sheet.setColumnWidth(8, 150); // Statut
-    sheet.setColumnWidth(9, 400); // Résumé
-    sheet.setColumnWidth(CONFIG.COL.PUBLISHED, 400); // Réponse publiée
-  }
-  
-  if (!isSilent) {
-    try {
-      SpreadsheetApp.getUi().alert('✅ Initialisation terminée. La feuille est prête à recevoir les questions de l\'extension.');
-    } catch (e) {
-      // Ignorer l'absence d'UI (contexte non interactif)
-    }
-  }
-
-  return sheet;
-}
-
-/**
- * Relance l'analyse Gemini pour la ligne actuellement sélectionnée
- */
-function relaunchGemini() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getActiveSheet();
-  
-  if (sheet.getName() !== CONFIG.SHEET_NAME) {
-    SpreadsheetApp.getUi().alert('❌ Veuillez vous placer sur la feuille de suivi.');
-    return;
-  }
-
-  const activeRange = sheet.getActiveRange();
-  const row = activeRange.getRow();
-  
-  if (row <= 1) {
-    SpreadsheetApp.getUi().alert('❌ Veuillez sélectionner une ligne de données (pas l\'en-tête).');
-    return;
-  }
-
-  // Récupérer le titre (colonne 5) comme contexte pour l'analyse
-  const title = sheet.getRange(row, CONFIG.COL.TITLE).getValue();
-  
-  if (!title) {
-    SpreadsheetApp.getUi().alert('❌ Le titre de la question est manquant sur cette ligne.');
-    return;
-  }
-
-  const ui = SpreadsheetApp.getUi();
-  const response = ui.alert('Analyse en cours', 'Gemini va relancer une recherche pour ce thread :\\n\\n"' + title + '"', ui.ButtonSet.OK_CANCEL);
-  
-  if (response === ui.Button.OK) {
-    // On met un indicateur visuel (Le résumé est maintenant en colonne 9)
-    const summaryCell = sheet.getRange(row, CONFIG.COL.SUMMARY);
-    summaryCell.setValue('⏳ Analyse Gemini en cours...');
-    SpreadsheetApp.flush();
-    
-    // On relance la génération en passant la question, ou le titre à défaut
-    const product = sheet.getRange(row, CONFIG.COL.PRODUCT).getValue() || "Inconnu";
-    const questionText = sheet.getRange(row, CONFIG.COL.QUESTION).getValue();
-    const author = sheet.getRange(row, CONFIG.COL.AUTHOR).getValue() || "Auteur inconnu";
-
-    const reply = generateReply(questionText || title, author, product);
-
-    // Application du RichText pour gérer le Gras et les puces
-    summaryCell.setRichTextValue(formatMarkdownToRichText(reply.text));
-    sheet.getRange(row, CONFIG.COL.NOTES).setValue(buildNote_("Relancé manuellement", reply));
-
-    // Avertir explicitement quand la proposition ne doit pas être publiée telle quelle
-    if (reply.truncated) {
-      ui.alert(
-        'Réponse incomplète',
-        "La génération s'est interrompue en cours de rédaction, même après une relance avec un budget doublé.\n\n" +
-        "Ne publiez pas ce texte tel quel : relancez l'analyse ou rédigez la réponse à la main.",
-        ui.ButtonSet.OK
-      );
-    } else if (reply.status === 'CLARIFICATION') {
-      ui.alert(
-        'À clarifier',
-        "Les informations de ce thread sont insuffisantes pour une réponse fiable.\n\n" +
-        "Gemini a rédigé une demande de précisions plutôt qu'une procédure : publier une " +
-        "procédure générique ici produirait une réponse plausible mais inapplicable.",
-        ui.ButtonSet.OK
-      );
-    } else if (reply.status === 'HORS_SUJET') {
-      ui.alert('Hors sujet', "Cette demande ne semble pas relever de ce forum. Relisez la proposition avant toute publication.", ui.ButtonSet.OK);
-    } else if (reply.uiPathUnsourced) {
-      ui.alert(
-        "Chemin d'interface non sourcé",
-        "Cette réponse décrit une suite d'étapes dans l'interface sans qu'aucune source n'ait été consultée.\n\n" +
-        "Les libellés de menus proviennent de la mémoire du modèle, donc d'un état passé de l'interface. " +
-        "Vérifiez chaque nom de menu avant de publier : les options Google sont fréquemment renommées, déplacées ou supprimées.",
-        ui.ButtonSet.OK
-      );
-    } else if (reply.confidence === 'FAIBLE') {
-      ui.alert('Confiance faible', "Gemini signale une confiance faible sur cette réponse. Vérifiez chaque affirmation avant de publier.", ui.ButtonSet.OK);
-    }
-  }
 }
 
 /**

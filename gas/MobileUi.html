@@ -228,7 +228,7 @@
     <div class="header">
       <div class="logo-badge">📱 Community Console Mobile</div>
       <h1>Suivi PE - iPhone</h1>
-      <p class="subtitle">Collez l'URL d'un thread Google pour l'enregistrer dans Sheets et générer la réponse Gemini</p>
+      <p class="subtitle">Collez l'URL d'un fil Google pour obtenir une proposition de réponse. Rien n'est conservé.</p>
     </div>
 
     <!-- Formulaire principal -->
@@ -255,7 +255,7 @@
 
       <button id="submitBtn" class="btn" onclick="submitThread()">
         <span class="spinner" id="spinner"></span>
-        <span id="btnText">🚀 Analyser & Suivre</span>
+        <span id="btnText">🚀 Analyser le fil</span>
       </button>
     </div>
 
@@ -338,13 +338,13 @@
         .withSuccessHandler(function(response) {
           submitBtn.disabled = false;
           spinner.style.display = 'none';
-          btnText.innerText = '🚀 Analyser & Suivre';
+          btnText.innerText = '🚀 Analyser le fil';
 
           if (response && response.status === 'success') {
             document.getElementById('productBadge').innerText = response.product || 'Google';
-            document.getElementById('resultTitle').innerText = (response.author ? response.author + " • " : "") + (response.title || 'Thread enregistré');
+            document.getElementById('resultTitle').innerText = (response.author ? response.author + " • " : "") + (response.title || 'Fil analysé');
             currentSummary = response.summary || '';
-            document.getElementById('summaryText').innerText = currentSummary || 'Thread sauvegardé dans Google Sheets.';
+            document.getElementById('summaryText').innerText = currentSummary || "Aucune proposition n'a pu être générée.";
             showReviewWarning(response);
             resultCard.style.display = 'block';
             resultCard.scrollIntoView({ behavior: 'smooth' });
@@ -355,7 +355,7 @@
         .withFailureHandler(function(error) {
           submitBtn.disabled = false;
           spinner.style.display = 'none';
-          btnText.innerText = '🚀 Analyser & Suivre';
+          btnText.innerText = '🚀 Analyser le fil';
           alert("Erreur d'analyse : " + error.message);
         })
         .processMobileThreadUrl(url, authorName, questionContent, sharedSecret);
