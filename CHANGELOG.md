@@ -2,6 +2,24 @@
 
 Toutes les modifications notables apportées à ce projet sont documentées dans ce fichier.
 
+## [1.13.1] - 2026-09-02
+
+### 📍 Intégration des boutons dans la console
+
+> **Les boutons restaient affichés après avoir quitté le fil**, par-dessus le panneau de notifications de la console — jusqu'à sa croix de fermeture.
+> `initTracker` sortait bien lorsque l'adresse n'était pas celle d'un fil, mais ne retirait jamais ce qu'il avait posé.
+
+- **Conteneur unique (`#pe-tracker-dock`)** : Chaque bouton portait ses propres coordonnées fixes, ce qui obligeait à réserver un décalage vertical par bouton et laissait un trou quand l'un d'eux était absent. Ils s'empilent désormais dans un seul élément positionné.
+- **Retrait hors des fils (`retirerDock`)** : Liste des questions, profil, brouillons — les boutons disparaissent. C'est le défaut constaté en usage réel.
+- **Remise à zéro au changement de fil (`reinitialiserEtatDuFil`)** : Second défaut, invisible sur une capture. La console est une application monopage : en passant d'un fil à l'autre, `analyseTerminee` restait à `true` et le bouton de relance conservait la décision prise sur le fil précédent. Le brouillon mémorisé fuitait de même d'un fil au suivant.
+- **Ancrage en bas à droite** : La barre supérieure porte la recherche, les notifications et l'avatar. Un retrait de 96 px depuis le bas dégage le bouton d'action rond de la console — vérifié par mesure : 16 px de garde, aucun recouvrement avec la barre, le panneau de notifications ou le bouton rond.
+- **`z-index` ramené de 999999 à 9000** : assez haut pour rester visible au-dessus du contenu, assez bas pour qu'une boîte de dialogue de la console passe devant plutôt que d'être recouverte.
+- **Hiérarchie visuelle** : l'action principale reste un bouton plein bleu ; « Répondre à la relance » devient un bouton tonal (`#e8f0fe`), pour qu'une seule action se lise comme principale. Ombres alignées sur les surfaces flottantes de Material, plus discrètes que la lueur colorée employée jusqu'ici.
+- **États par classe (`etatBouton`)** : les couleurs de succès, d'erreur et d'alerte étaient posées via `style.backgroundColor`, qui n'emporte pas la couleur du texte — le bleu du bouton secondaire devenait illisible sur fond vert ou rouge. Fond et texte sont désormais définis ensemble.
+- **Teinte accordée à la page, non au système (`accorderAuTheme_`)** : `prefers-color-scheme` décrit le réglage du système d'exploitation. Un navigateur en thème sombre devant une console claire donnait des boutons sombres posés sur du blanc. La luminance du fond réellement peint est mesurée (Rec. 601), avec repli sur l'élément racine : beaucoup de pages ne peignent pas le corps, et un fond transparent lu comme du noir aurait fait basculer en sombre une console parfaitement claire.
+- **Aucune lecture de `window.location` au chargement** : `derniereUrl` part vide et s'établit au premier passage dans `initTracker`. Un script de contenu ne doit rien exiger de l'environnement avant d'être appelé.
+- **`tests/25-integration-des-boutons.test.js`** : 24 contrôles — cycle de vie du conteneur au fil de la navigation, remise à zéro entre deux fils, détection de thème sur cinq configurations de fond, et invariants de la feuille de style. Rendu vérifié dans un navigateur sur une maquette de la console, en thème clair et sombre.
+
 ## [1.13.0] - 2026-09-02
 
 ### 🗑️ Suppression du suivi Google Sheets : l'outil ne conserve plus rien

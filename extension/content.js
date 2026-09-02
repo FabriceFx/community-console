@@ -1092,7 +1092,98 @@ function creerBoutonRelance(premiereIntervention) {
     }, 4000);
   });
 
-  document.body.appendChild(btn);
+  obtenirDock().appendChild(btn);
+}
+
+/**
+ * Applique un état visuel à un bouton.
+ *
+ * Par classe et non par `style.backgroundColor` : une couleur de fond posée en ligne
+ * n'emporte pas la couleur du texte, et le bleu du bouton secondaire devenait
+ * illisible sur un fond vert ou rouge.
+ *
+ * @param {HTMLElement} btn
+ * @param {string|null} etat 'succes', 'erreur', 'alerte', ou null pour revenir au repos
+ */
+function etatBouton(btn, etat) {
+  btn.classList.remove('pe-etat-succes', 'pe-etat-erreur', 'pe-etat-alerte');
+  if (etat) btn.classList.add('pe-etat-' + etat);
+}
+
+/**
+ * Renvoie le conteneur des boutons, en le créant au besoin.
+ *
+ * Un seul élément est positionné : les boutons s'y empilent naturellement. Chacun
+ * portait auparavant ses propres coordonnées fixes, ce qui obligeait à réserver un
+ * décalage vertical par bouton et laissait un trou quand l'un d'eux était absent.
+ *
+ * @returns {HTMLElement}
+ */
+function obtenirDock() {
+  let dock = document.getElementById('pe-tracker-dock');
+  if (!dock) {
+    dock = document.createElement('div');
+    dock.id = 'pe-tracker-dock';
+    document.body.appendChild(dock);
+  }
+  accorderAuTheme_(dock);
+  return dock;
+}
+
+/**
+ * Aligne la teinte des boutons sur celle de la console.
+ *
+ * `prefers-color-scheme` décrit le réglage du système, pas celui de la page : un
+ * navigateur en thème sombre affichant une console claire donnait des boutons
+ * sombres posés sur du blanc. On lit donc le fond réellement peint par la page.
+ *
+ * @param {HTMLElement} dock
+ */
+function accorderAuTheme_(dock) {
+  // `body` d'abord, `html` ensuite : beaucoup de pages ne peignent le fond que sur
+  // l'élément racine, et le corps reste alors transparent — un fond transparent lu
+  // comme du noir aurait fait basculer en variante sombre une console claire.
+  const luminance = luminanceDuFond_(document.body);
+  const retenue = (luminance === null) ? luminanceDuFond_(document.documentElement) : luminance;
+
+  // Sans information exploitable, la variante claire, par défaut, reste en place
+  dock.classList.toggle('pe-sombre', retenue !== null && retenue < 128);
+}
+
+/**
+ * Luminance perçue (Rec. 601) du fond d'un élément.
+ * @param {HTMLElement} el
+ * @returns {number|null} La luminance, ou null si le fond est transparent ou illisible
+ */
+function luminanceDuFond_(el) {
+  if (!el) return null;
+
+  let fond = '';
+  try {
+    fond = window.getComputedStyle(el).backgroundColor || '';
+  } catch (e) {
+    return null;
+  }
+
+  const m = fond.match(/^rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,\s/]+([\d.]+))?/i);
+  if (!m) return null;
+
+  const alpha = (m[4] === undefined) ? 1 : parseFloat(m[4]);
+  if (!alpha) return null;
+
+  return 0.299 * Number(m[1]) + 0.587 * Number(m[2]) + 0.114 * Number(m[3]);
+}
+
+/**
+ * Retire les boutons de la page.
+ *
+ * Indispensable sur une application monopage : sans cela, les boutons posés sur un fil
+ * survivaient au retour vers la liste des questions, où ils recouvraient le panneau de
+ * notifications de la console — jusqu'à sa croix de fermeture.
+ */
+function retirerDock() {
+  const dock = document.getElementById('pe-tracker-dock');
+  if (dock) dock.remove();
 }
 
 /**
@@ -1107,6 +1198,7 @@ function creerBoutonPrincipal() {
   btn.id = 'pe-tracker-btn';
   btn.innerHTML = '✍️ Proposer une réponse';
   btn.title = "Analyser ce fil et placer une proposition de réponse dans le champ d'édition";
+  btn.type = 'button';
   
   btn.addEventListener('click', async () => {
     btn.disabled = true;
@@ -1176,7 +1268,7 @@ function creerBoutonPrincipal() {
       if (data && data.status === 'error') {
         alert("Le backend a refusé la demande :\n\n" + (data.message || 'Erreur inconnue'));
         btn.innerHTML = '❌ Refusé';
-        btn.style.backgroundColor = '#d93025';
+        etatBouton(btn, 'erreur');
         return;
       }
 
@@ -1202,13 +1294,13 @@ function creerBoutonPrincipal() {
         // réponse : le risque de la publier par réflexe est trop élevé.
         try { await navigator.clipboard.writeText(summaryText); } catch (clipErr) { /* presse-papier indisponible */ }
         btn.innerHTML = '❌ Réponse incomplète';
-        btn.style.backgroundColor = '#d93025';
+        etatBouton(btn, 'erreur');
       } else if (summaryText) {
         const reponsePlacee = await injecterReponse(summaryText);
 
         if (reponsePlacee) {
           btn.innerHTML = '✅ Réponse placée';
-          btn.style.backgroundColor = '#0f9d58';
+          etatBouton(btn, 'succes');
           // Amorcer la mémoire avec le texte injecté : elle sert de repère pour situer
           // votre message dans le fil si une relance arrive ensuite.
           contenuEditeurMemorise = summaryText.trim();
@@ -1216,32 +1308,32 @@ function creerBoutonPrincipal() {
           try {
             await navigator.clipboard.writeText(summaryText);
             btn.innerHTML = '✅ Réponse copiée 📋';
-            btn.style.backgroundColor = '#0f9d58';
+            etatBouton(btn, 'succes');
             alert("Le champ de réponse n'a pas pu être ouvert.\n\nLa proposition a été copiée dans votre presse-papier.");
           } catch (clipErr) {
             btn.innerHTML = '⚠️ Réponse non placée';
-            btn.style.backgroundColor = '#f29900';
+            etatBouton(btn, 'alerte');
           }
         }
       } else {
         btn.innerHTML = '⚠️ Aucune réponse générée';
-        btn.style.backgroundColor = '#f29900';
+        etatBouton(btn, 'alerte');
       }
 
     } catch (globalError) {
       console.error("Erreur fatale dans le script de l'extension :", globalError);
       btn.innerHTML = '❌ Erreur Script';
-      btn.style.backgroundColor = '#d93025';
+      etatBouton(btn, 'erreur');
     } finally {
       setTimeout(() => {
         btn.innerHTML = '✍️ Proposer une réponse';
-        btn.style.backgroundColor = '';
+        etatBouton(btn, null);
         btn.disabled = false;
       }, 4000);
     }
   });
 
-  document.body.appendChild(btn);
+  obtenirDock().appendChild(btn);
 }
 
 /**
@@ -1252,8 +1344,40 @@ function creerBoutonPrincipal() {
  * Console n'a pas fini de construire sa page. Les réunir sous une même garde
  * empêchait toute réévaluation dès le bouton posé.
  */
+// Dernière adresse observée. La Community Console est une application monopage :
+// on passe d'un fil à l'autre sans rechargement, et rien ne signale le changement.
+// Laissée vide au chargement, et non lue depuis window.location : un script de contenu
+// ne doit rien exiger de l'environnement avant d'être appelé. Le premier passage dans
+// initTracker établit la référence, et la remise à zéro qu'il déclenche est sans effet
+// puisque rien n'a encore été posé.
+let derniereUrl = '';
+
+/**
+ * Remet à zéro tout ce qui décrit le fil courant.
+ *
+ * Sans cela, l'analyse d'un fil restait valable pour le suivant : `analyseTerminee`
+ * demeurant à true, le bouton de relance n'était jamais réévalué et conservait la
+ * décision prise sur le fil précédent.
+ */
+function reinitialiserEtatDuFil() {
+  retirerDock();
+  contenuEditeurMemorise = '';
+  diagnosticAffiche = false;
+  tentativesDiagnostic = 0;
+  analyseTerminee = false;
+  boutonRelanceEnCours = false;
+}
+
 function initTracker() {
+  if (window.location.href !== derniereUrl) {
+    derniereUrl = window.location.href;
+    reinitialiserEtatDuFil();
+  }
+
   if (!window.location.pathname.includes('/thread/')) {
+    // Liste des questions, profil, brouillons : les boutons n'y ont rien à faire et
+    // recouvriraient l'interface de la console.
+    retirerDock();
     return;
   }
 

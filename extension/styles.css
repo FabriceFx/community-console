@@ -1,69 +1,126 @@
-#pe-tracker-btn {
+/*
+ * Conteneur unique des boutons de l'extension.
+ *
+ * Ancré en bas à droite plutôt qu'en haut : la barre supérieure de la Community
+ * Console porte la recherche, les notifications et l'avatar, et un bouton flottant
+ * y recouvrait le panneau de notifications — jusqu'à sa croix de fermeture.
+ * Le retrait de 96 px depuis le bas dégage le bouton d'action rond de la console.
+ */
+#pe-tracker-dock {
   position: fixed;
-  top: 100px;
+  bottom: 96px;
   right: 24px;
-  z-index: 999999;
-  background-color: #1a73e8;
-  color: white;
-  border: none;
-  border-radius: 24px;
-  padding: 12px 24px;
-  font-family: 'Google Sans', Roboto, Arial, sans-serif;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  box-shadow: 0 4px 12px rgba(26,115,232,0.3);
-  transition: all 0.2s ease;
+  /* Assez haut pour rester visible au-dessus du contenu, assez bas pour qu'une
+     boîte de dialogue de la console passe devant plutôt que d'être recouverte. */
+  z-index: 9000;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  /* Le contenu est ajouté dans l'ordre principal puis relance ; l'inversion place
+     l'action principale en bas, au plus près du coin. */
+  flex-direction: column-reverse;
+  align-items: flex-end;
   gap: 8px;
+  pointer-events: none;
 }
 
-#pe-tracker-btn:hover {
-  background-color: #1557b0;
-  box-shadow: 0 6px 16px rgba(26,115,232,0.4);
-  transform: translateY(-2px);
-}
-
-#pe-tracker-btn:active {
-  transform: translateY(0);
-}
-
-#pe-followup-btn {
-  position: fixed;
-  top: 152px;
-  right: 24px;
-  z-index: 999999;
-  background-color: #f29900;
-  color: #ffffff;
+#pe-tracker-dock > button {
+  pointer-events: auto;
   border: none;
-  border-radius: 24px;
-  padding: 11px 22px;
+  border-radius: 20px;
+  padding: 10px 20px;
   font-family: 'Google Sans', Roboto, Arial, sans-serif;
   font-size: 14px;
   font-weight: 500;
+  line-height: 20px;
+  letter-spacing: 0.15px;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(242,153,0,0.3);
-  transition: all 0.2s ease;
+  white-space: nowrap;
+  /* Ombre alignée sur celle des surfaces flottantes de Material, plus discrète
+     que la lueur colorée employée jusqu'ici. */
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.3), 0 4px 8px 3px rgba(60, 64, 67, 0.15);
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-#pe-followup-btn:hover {
-  background-color: #d68600;
-  box-shadow: 0 6px 16px rgba(242,153,0,0.4);
-  transform: translateY(-2px);
+#pe-tracker-dock > button:focus-visible {
+  outline: 2px solid #1a73e8;
+  outline-offset: 2px;
 }
 
-#pe-followup-btn:disabled {
-  background-color: #80868b;
+#pe-tracker-dock > button:disabled {
+  background-color: #f1f3f4;
+  color: #80868b;
   box-shadow: none;
-  cursor: not-allowed;
-  transform: none;
+  cursor: default;
 }
 
-#pe-tracker-btn:disabled {
-  background-color: #80868b;
-  box-shadow: none;
-  cursor: not-allowed;
-  transform: none;
+/* Action principale : rédiger la proposition */
+#pe-tracker-btn {
+  background-color: #1a73e8;
+  color: #ffffff;
+}
+
+#pe-tracker-btn:hover:not(:disabled) {
+  background-color: #1557b0;
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.3), 0 8px 12px 6px rgba(60, 64, 67, 0.15);
+}
+
+/* Action secondaire : intervenir sur un fil déjà entamé.
+   Traitée en bouton tonal plutôt qu'en second bouton plein, pour qu'une seule
+   action se lise comme principale. */
+#pe-followup-btn {
+  background-color: #e8f0fe;
+  color: #1a73e8;
+}
+
+#pe-followup-btn:hover:not(:disabled) {
+  background-color: #d2e3fc;
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.3), 0 8px 12px 6px rgba(60, 64, 67, 0.15);
+}
+
+/*
+ * Variante sombre, posée par accorderAuTheme_ d'après le fond réellement peint par
+ * la page — et non d'après `prefers-color-scheme`, qui décrit le réglage du système :
+ * un navigateur en thème sombre devant une console claire donnait des boutons
+ * sombres sur du blanc.
+ */
+#pe-tracker-dock.pe-sombre > #pe-tracker-btn {
+  background-color: #8ab4f8;
+  color: #202124;
+}
+
+#pe-tracker-dock.pe-sombre > #pe-tracker-btn:hover:not(:disabled) {
+  background-color: #aecbfa;
+}
+
+#pe-tracker-dock.pe-sombre > #pe-followup-btn {
+  background-color: #303134;
+  color: #8ab4f8;
+}
+
+#pe-tracker-dock.pe-sombre > #pe-followup-btn:hover:not(:disabled) {
+  background-color: #3c4043;
+}
+
+#pe-tracker-dock.pe-sombre > button:disabled {
+  background-color: #303134;
+  color: #80868b;
+}
+
+/*
+ * États transitoires affichés après une action.
+ * Fond ET couleur de texte sont définis ensemble : le bouton secondaire est bleu
+ * sur fond clair au repos, illisible si seul le fond changeait.
+ */
+#pe-tracker-dock > button.pe-etat-succes {
+  background-color: #0f9d58;
+  color: #ffffff;
+}
+
+#pe-tracker-dock > button.pe-etat-erreur {
+  background-color: #d93025;
+  color: #ffffff;
+}
+
+#pe-tracker-dock > button.pe-etat-alerte {
+  background-color: #f29900;
+  color: #202124;
 }
