@@ -208,11 +208,10 @@ function verifierVersionBackend(data) {
 let dernierTexteCapture = '';
 
 // Dernier contenu connu de l'éditeur.
-// Indispensable : une fois le message publié, le forum retire l'éditeur du DOM. Sans cette
-// mémoire, toute capture postérieure à la publication est impossible — c'est précisément
-// le moment où l'on pense à cliquer sur « Enregistrer ma version ».
+// Indispensable : une fois le message publié, le forum retire l'éditeur du DOM. La lecture
+// se fait en phase de capture, avant que le champ ne soit vidé, mais cette mémoire couvre
+// les cas où l'éditeur a déjà disparu. Elle sert aussi de référence à la relance.
 let contenuEditeurMemorise = '';
-let captureDejaReussie = false;
 
 /**
  * Lit le texte d'un élément d'édition, qu'il s'agisse d'un champ de formulaire
@@ -249,7 +248,7 @@ function choisirTexteACapturer(texteLive, texteMemorise) {
  */
 document.addEventListener('input', (event) => {
   const el = event.target;
-  if (!el || el.id === 'pe-tracker-btn' || el.id === 'pe-capture-btn') return;
+  if (!el || el.id === 'pe-tracker-btn') return;
 
   const estZoneEdition =
     el.tagName === 'TEXTAREA' ||
@@ -266,16 +265,14 @@ document.addEventListener('input', (event) => {
 
 document.addEventListener('click', (event) => {
   const cible = event.target.closest ? event.target.closest('button, [role="button"], a, input[type="submit"]') : null;
-  if (!cible || cible.id === 'pe-tracker-btn' || cible.id === 'pe-capture-btn') return;
+  if (!cible || cible.id === 'pe-tracker-btn') return;
   if (!estBoutonPublier(cible)) return;
 
   const texte = choisirTexteACapturer(lireTexteEditeur(trouverEditeurReponse()), contenuEditeurMemorise);
   if (!texte || texte === dernierTexteCapture) return;
 
   dernierTexteCapture = texte;
-  enregistrerReponsePubliee(texte).then((res) => {
-    if (res.ok) captureDejaReussie = true;
-  });
+  enregistrerReponsePubliee(texte);
 }, true);
 
 /**
@@ -510,69 +507,6 @@ async function injecterReponse(text, mode, messageCible) {
     console.error("Erreur lors de l'injection dans la zone de réponse :", e);
     return false;
   }
-}
-
-/**
- * Affiche le bouton de capture manuelle de la réponse publiée.
- * Complément à la détection automatique du clic sur « Publier », qui peut échouer
- * si le forum change ses libellés ou si l'envoi se fait au clavier.
- */
-function afficherBoutonCapture() {
-  if (document.getElementById('pe-capture-btn')) return;
-
-  const btn = document.createElement('button');
-  btn.id = 'pe-capture-btn';
-  btn.innerHTML = '📝 Enregistrer ma version';
-  btn.title = "Enregistrer le texte actuellement dans l'éditeur comme réponse publiée (alimente le style de l'outil)";
-
-  btn.addEventListener('click', async () => {
-    // L'éditeur peut avoir disparu (message déjà publié) : on retombe alors
-    // sur le dernier contenu mémorisé pendant la saisie.
-    const texte = choisirTexteACapturer(lireTexteEditeur(trouverEditeurReponse()), contenuEditeurMemorise);
-
-    if (!texte) {
-      if (captureDejaReussie) {
-        alert("✅ Votre réponse a déjà été enregistrée pour ce thread.\n\nElle figure dans la colonne « Réponse publiée » de votre feuille de suivi.");
-      } else {
-        alert(
-          "Aucun texte à enregistrer.\n\n" +
-          "L'éditeur est vide ou a déjà été fermé par le forum, et rien n'a été mémorisé pendant la saisie.\n\n" +
-          "Si vous avez déjà publié : copiez votre message depuis le fil, collez-le dans la colonne " +
-          "« Réponse publiée » de la feuille de suivi. Il alimentera le style au même titre."
-        );
-      }
-      return;
-    }
-
-    if (texte === dernierTexteCapture && captureDejaReussie) {
-      alert("✅ Cette version a déjà été enregistrée.");
-      return;
-    }
-
-    btn.disabled = true;
-    btn.innerHTML = '⏳ Enregistrement...';
-
-    dernierTexteCapture = texte;
-    const res = await enregistrerReponsePubliee(texte);
-    if (res.ok) captureDejaReussie = true;
-
-    if (!res.ok) {
-      btn.innerHTML = '❌ Échec de l\'enregistrement';
-      alert("L'enregistrement a échoué.\n\nVérifiez l'URL de la WebApp et le secret partagé dans les options de l'extension, puis réessayez.");
-    } else if (res.modified) {
-      btn.innerHTML = `✅ Retouche enregistrée (${res.editRatio} %)`;
-    } else {
-      // Rien n'est stocké : une proposition publiée telle quelle n'apprend rien au modèle
-      btn.innerHTML = 'ℹ️ Proposition non modifiée';
-    }
-
-    setTimeout(() => {
-      btn.innerHTML = '📝 Enregistrer ma version';
-      btn.disabled = false;
-    }, 3000);
-  });
-
-  document.body.appendChild(btn);
 }
 
 /**
@@ -1454,9 +1388,6 @@ function creerBoutonPrincipal() {
           // Amorcer la mémoire avec le texte injecté : si le PE publie sans rien modifier,
           // aucun événement `input` ne se déclenche et il n'y aurait rien à enregistrer.
           contenuEditeurMemorise = summaryText.trim();
-          // Filet de sécurité : si la détection automatique du clic sur « Publier »
-          // échoue (libellé inattendu, envoi au clavier), la capture reste possible à la main.
-          afficherBoutonCapture();
         } else {
           try {
             await navigator.clipboard.writeText(summaryText);

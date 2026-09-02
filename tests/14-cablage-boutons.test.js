@@ -23,7 +23,6 @@ console.log('\nToute fonction déclarée doit être réellement appelée');
   'creerBoutonRelance',
   'trouverBoutonCommenter',
   'diagnostiquerUneFois',
-  'afficherBoutonCapture',
   'extraireFilStructure',
   'trouverDemandeur',
   'isolerRelanceStructuree',
@@ -39,6 +38,19 @@ console.log('\nToute fonction déclarée doit être réellement appelée');
   check(nom + ' déclarée', declare(nom), v => v === true);
   check(nom + ' appelée au moins une fois', appels(nom), n => n >= 1);
 });
+
+console.log('\nLe bouton de capture manuelle a été retiré');
+// Retiré à la demande du Product Expert : il ne s'en servait pas. L'enregistrement
+// de la réponse publiée reste automatique, au clic sur « Publier ». Ce contrôle évite
+// qu'une réintroduction partielle laisse du code mort — styles orphelins, drapeau
+// écrit et jamais lu — comme c'était le cas avant le retrait.
+['afficherBoutonCapture', 'captureDejaReussie', 'pe-capture-btn'].forEach((trace) => {
+  check('aucune trace de « ' + trace +' » dans content.js', source.includes(trace), v => v === false);
+});
+check('aucun style orphelin dans styles.css', fs.readFileSync('extension/styles.css', 'utf8').includes('pe-capture-btn'), v => v === false);
+// L'enregistrement automatique, lui, doit rester câblé
+check('enregistrerReponsePubliee toujours appelée', appels('enregistrerReponsePubliee'), n => n >= 1);
+check('la mémoire de l\'éditeur reste alimentée', source, t => t.includes('contenuEditeurMemorise = texte'));
 
 console.log('\nPoints d\'entrée attendus dans initTracker');
 const initTracker = source.slice(source.indexOf('function initTracker()'));

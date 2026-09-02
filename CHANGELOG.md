@@ -2,6 +2,20 @@
 
 Toutes les modifications notables apportées à ce projet sont documentées dans ce fichier.
 
+## [1.12.8] - 2026-09-02
+
+### 🧹 Retrait du bouton « Enregistrer ma version »
+
+> **Fonctionnalité retirée à la demande du Product Expert : elle n'était pas utilisée.**
+> L'enregistrement de la réponse publiée reste automatique, au clic sur le bouton **Publier** du forum. Seul le déclenchement manuel disparaît.
+
+- **Bouton `#pe-capture-btn` supprimé (`extension/content.js`, `extension/styles.css`)** : `afficherBoutonCapture` et ses trois règles CSS sont retirés, ainsi que son unique appel après placement d'une réponse.
+- **Code mort évacué avec lui** : le drapeau `captureDejaReussie` n'était lu que par les messages de ce bouton ; il n'était plus qu'écrit. Les deux écouteurs globaux n'ont plus à écarter son identifiant.
+- **Boucle d'apprentissage du style intacte** : `enregistrerReponsePubliee` reste appelée par la détection du clic sur « Publier », en phase de capture, avant que le forum ne vide l'éditeur. `contenuEditeurMemorise` est conservée — elle couvre le cas où l'éditeur a déjà disparu, sert de référence au traitement des relances, et reste amorcée avec le texte injecté pour qu'une proposition publiée sans retouche soit malgré tout comparée.
+- **Conséquence assumée** : si la détection du clic échoue — libellé de bouton inattendu, envoi au clavier — plus rien ne rattrape l'enregistrement. Le recours reste de coller le message dans la colonne *Réponse publiée* de la feuille, qui alimente le style au même titre.
+- **Garde-fou de non-retour (`tests/14`)** : trois contrôles vérifient qu'aucune trace du bouton ne subsiste dans `content.js` ni dans `styles.css`, et deux autres que l'enregistrement automatique reste bien câblé. Une réintroduction partielle — style orphelin, drapeau écrit et jamais lu — serait signalée.
+- **Couverture totale** : 28 fichiers de test unitaire, 100 % verts (`node tests/run.js`).
+
 ## [1.12.7] - 2026-09-02
 
 ### ✍️ Signature configurable et formules de clôture dans les cinq langues
