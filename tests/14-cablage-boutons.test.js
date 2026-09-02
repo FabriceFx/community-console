@@ -53,7 +53,10 @@ const avantAnalyse = initTracker.slice(0, initTracker.indexOf('afficherBoutonRel
 check('aucune sortie sur présence du bouton principal', avantAnalyse, t => !t.includes("getElementById('pe-tracker-btn')"));
 check('la garde de fin d\'analyse est distincte',       initTracker, t => t.includes('if (analyseTerminee) return;'));
 check('l\'analyse se clôt sur succès',                  source, t => /analyseTerminee = true;[\s\S]{0,120}const demandeur/.test(t));
-check('l\'analyse se clôt sur épuisement du quota',     source, t => /diagnosticAffiche = true;\s*\n\s*analyseTerminee = true;/.test(t));
+check('l\'analyse se clôt sur épuisement du quota',     source, t => /tentativesDiagnostic < MAX_TENTATIVES_DIAGNOSTIC[\s\S]{0,200}?analyseTerminee = true;/.test(t));
+// La garde de tête `if (diagnosticAffiche) return;` doit être rouverte tant que le
+// quota d'essais n'est pas épuisé, faute de quoi un seul essai a réellement lieu.
+check('un essai infructueux réarme le diagnostic',       source, t => /if \(tentativesDiagnostic < MAX_TENTATIVES_DIAGNOSTIC\) \{[\s\S]{0,300}?diagnosticAffiche = false;[\s\S]{0,40}?return;/.test(t));
 
 console.log('\nLa version est journalisée au chargement');
 check('numéro de version affiché', source, t => t.includes('getManifest().version'));

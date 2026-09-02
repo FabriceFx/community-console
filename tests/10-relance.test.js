@@ -8,7 +8,9 @@
 const fs = require('fs'), vm = require('vm');
 
 function makeSandbox(closings) {
-  const store = {};
+  // La signature vient du panneau de contrôle, elle n'est plus codée en dur :
+  // le bac à sable la configure comme le ferait un Product Expert.
+  const store = { PE_SIGNATURE: 'Fabrice' };
   if (closings) Object.keys(closings).forEach(k => { store['PE_CLOSINGS_' + k] = closings[k]; });
   const props = { getProperty: k => (k in store ? store[k] : null), setProperty: (k,v) => { store[k]=v; }, deleteProperty: k => { delete store[k]; } };
   const sb = {

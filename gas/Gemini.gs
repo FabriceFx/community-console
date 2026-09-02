@@ -235,18 +235,22 @@ function cleanAndValidateUrls(text, candidate) {
   // 3. Traiter les URL brutes restantes (redirections Vertex AI, liens inventés, liens morts)
   const rawUrlRegex = /https?:\/\/[^\s\)\],]+/g;
   cleanedText = cleanedText.replace(rawUrlRegex, (url) => {
-    // Un lien officiel ponctué en fin de phrase est rétabli dans sa forme exacte,
-    // la ponctuation restant en dehors de l'URL cliquable.
+    // La ponctuation de fin de phrase n'appartient pas à l'URL : elle est mise de côté
+    // AVANT toute vérification, et pas seulement pour les liens de confiance.
+    // Sans cela, un article du Centre d'aide pourtant remonté par googleSearch était
+    // testé sous la forme « .../answer/8253. », renvoyait 404 et disparaissait —
+    // en emportant la fin de la phrase qui l'introduisait.
     const trailing = (url.match(/[.,;:!?]+$/) || [''])[0];
     const bareUrl = trailing ? url.slice(0, -trailing.length) : url;
+
     if (isTrustedUrl_(bareUrl)) {
       return canonicalTrustedUrl_(bareUrl) + trailing;
     }
 
-    const targetUrl = resolveRedirectUrl(url);
+    const targetUrl = resolveRedirectUrl(bareUrl);
 
-    if (isVerified(targetUrl, url) || isKeepable(targetUrl)) {
-      return targetUrl;
+    if (isVerified(targetUrl, bareUrl) || isKeepable(targetUrl)) {
+      return targetUrl + trailing;
     }
 
     return DROPPED;
@@ -285,7 +289,7 @@ function sanitizePii(text) {
   cleaned = cleaned.replace(emailRegex, '[EMAIL MASQUÉ]');
 
   // 2. Masquer les numéros de téléphone (Format Français et International)
-  const phoneRegex = /(?:\+33|0)[1-9](?:[\s.-]?\d{2}){4}|\+\d{1,4}(?:[\s.-]?\d{2,4}){3,4}/g;
+  const phoneRegex = /(?:\+33[\s.-]?|0)[1-9](?:[\s.-]?\d{2}){4}|\+\d{1,4}(?:[\s.-]?\d{2,4}){3,4}/g;
   cleaned = cleaned.replace(phoneRegex, '[TÉLÉPHONE MASQUÉ]');
 
   // 3. Masquer les clés API, tokens et mots de passe évidents
@@ -348,6 +352,34 @@ function invalidateStyleExamplesCache_() {
 }
 
 /**
+ * Échappe les caractères spéciaux d'une chaîne destinée à une expression régulière.
+ * La signature est saisie librement dans le panneau de contrôle : un point ou une
+ * parenthèse y prendrait sinon son sens d'opérateur.
+ *
+ * @param {string} texte
+ * @returns {string}
+ */
+function echapperRegex_(texte) {
+  return String(texte === null || texte === undefined ? '' : texte).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Appose la signature du Product Expert au bas d'un message.
+ *
+ * Elle est configurable depuis le panneau de contrôle et peut être vide. Elle était
+ * auparavant codée en dur : quiconque installait l'outil signait ses réponses du
+ * prénom de son auteur, et la boucle d'apprentissage du style ne reconnaissait plus
+ * la fin de ses propres messages.
+ *
+ * @param {Array<string>} blocs Les blocs du message, déjà séparés par des lignes vides
+ * @returns {string} Le message complet, signé si une signature est configurée
+ */
+function apposerSignature_(blocs) {
+  const signature = (typeof getSignature === 'function') ? getSignature() : '';
+  return (signature ? blocs.concat(['', signature]) : blocs).join('\n');
+}
+
+/**
  * Retire de la coquille automatique (accueil, clôture, signature) le corps d'une réponse publiée.
  * Seul le corps a valeur d'exemple : la coquille est déjà générée par buildFormattedResponse,
  * et l'accueil contient le prénom de l'auteur, qui n'a rien à faire dans un prompt.
@@ -364,11 +396,17 @@ function stripReplyShell_(published) {
     lines.shift();
   }
 
-  // Retirer la signature finale et tout ce qui la suit
-  for (let i = lines.length - 1; i >= 0; i--) {
-    if (/^fabrice\s*$/i.test(lines[i].trim())) {
-      lines = lines.slice(0, i);
-      break;
+  // Retirer la signature finale et tout ce qui la suit.
+  // Sans signature configurée, il n'y a rien à repérer : le retrait de la dernière
+  // ligne non vide, juste en dessous, suffit à écarter la formule de clôture.
+  const signature = (typeof getSignature === 'function') ? getSignature() : '';
+  if (signature) {
+    const motifSignature = new RegExp('^' + echapperRegex_(signature) + '\\s*$', 'i');
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (motifSignature.test(lines[i].trim())) {
+        lines = lines.slice(0, i);
+        break;
+      }
     }
   }
 
@@ -418,7 +456,7 @@ function getStyleExamples_() {
       examples.push(sanitizePii(body).substring(0, 900));
     }
   } catch (e) {
-    console.warn("Lecture des exemples de style impossible : " + e.toString());
+    console.warn("Lecture des exemples de style impossible : " + redactSecrets_(e));
   }
 
   try {
@@ -717,14 +755,14 @@ function buildFollowUpResponse(lang, body, suite) {
 
   // Sur un simple remerciement, une formule de clôture invitant à revenir serait de trop
   if (String(suite || '').toUpperCase() === 'RESOLU') {
-    return [texte, '', 'Fabrice'].join('\n');
+    return apposerSignature_([texte]);
   }
 
   const custom = (typeof getCustomClosings === 'function') ? getCustomClosings(langKey) : null;
   const pool = (custom && custom.length) ? custom : REPLY_SHELLS[langKey].closings;
   const closing = pickVariant_(pool, 'PE_LAST_CLOSING_' + langKey);
 
-  return closing ? [texte, '', closing, '', 'Fabrice'].join('\n') : [texte, '', 'Fabrice'].join('\n');
+  return apposerSignature_(closing ? [texte, '', closing] : [texte]);
 }
 
 /**
@@ -1071,9 +1109,9 @@ function buildFormattedResponse(lang, displayName, product, technicalResponse, s
 
   // Une clôture vide est un choix légitime : le message s'arrête alors sur le fond,
   // sans phrase de transition artificielle avant la signature.
-  const blocs = closing ? [greeting, '', body, '', closing, '', 'Fabrice'] : [greeting, '', body, '', 'Fabrice'];
+  const blocs = closing ? [greeting, '', body, '', closing] : [greeting, '', body];
 
-  return blocs.join('\n');
+  return apposerSignature_(blocs);
 }
 
 /**
@@ -1358,6 +1396,7 @@ function formatMarkdownToRichText(text) {
     let displayText = "";
     let isBold = false;
     let linkUrl = null;
+    let linkEnd = null;
 
     if (match[1]) {
       // **[label](url)** -> Gras + Lien
@@ -1373,9 +1412,13 @@ function formatMarkdownToRichText(text) {
       displayText = match[8];
       isBold = true;
     } else if (match[9]) {
-      // URL brute -> Lien cliquable sur l'URL
-      displayText = match[9];
-      linkUrl = match[9];
+      // URL brute -> Lien cliquable sur l'URL sans la ponctuation finale de phrase
+      const rawUrl = match[9];
+      const trailing = (rawUrl.match(/[.,;:!?]+$/) || [''])[0];
+      const bareUrl = trailing ? rawUrl.slice(0, -trailing.length) : rawUrl;
+      displayText = rawUrl;
+      linkUrl = bareUrl;
+      linkEnd = currentPos + bareUrl.length;
     }
 
     const start = currentPos;
@@ -1388,7 +1431,7 @@ function formatMarkdownToRichText(text) {
       boldRanges.push([start, end]);
     }
     if (linkUrl) {
-      linkRanges.push([start, end, linkUrl]);
+      linkRanges.push([start, linkEnd || end, linkUrl]);
     }
 
     lastIndex = combinedRegex.lastIndex;
@@ -1424,10 +1467,16 @@ function formatMarkdownToRichText(text) {
  * @param {string} contexte.author Prénom affiché de la personne
  * @param {string} contexte.product Produit Google concerné
  * @param {boolean} [contexte.peADejaRepondu] false si le Product Expert n'a pas encore écrit sur ce fil
+ * @param {string} [contexte.apiKey] Clé API Gemini transmise dynamiquement (jamais persistée)
  * @returns {{ok: boolean, suite: string, confidence: string, lang: string, text: string, repeatsPrevious: boolean, truncated: boolean}}
  */
 function generateFollowUp(contexte) {
-  const apiKey = getGeminiApiKey();
+  // Même règle que generateReply : la clé transmise par l'appelant sert à la requête
+  // en cours et n'est jamais persistée. Sans cela, un Product Expert ayant configuré
+  // sa clé uniquement dans l'extension voyait toutes ses relances échouer.
+  const apiKey = (contexte.apiKey && String(contexte.apiKey).trim())
+    ? String(contexte.apiKey).trim()
+    : getGeminiApiKey();
   if (!apiKey) {
     return {
       ok: false, suite: 'ERREUR', confidence: 'FAIBLE', lang: 'fr', repeatsPrevious: false, truncated: false,
@@ -1455,8 +1504,8 @@ ${sanitizePii(String(contexte.question || '').trim()) || '(non disponible)'}
 """
 
 ${contexte.peADejaRepondu === false
-    ? "RÉPONSE DÉJÀ PUBLIÉE PAR UN AUTRE BÉNÉVOLE — figure dans le fil ci-dessous ; n'en reproduis rien :"
-    : "RÉPONSE DÉJÀ PUBLIÉE PAR LE PRODUCT EXPERT — à ne surtout pas reformuler :"}
+      ? "RÉPONSE DÉJÀ PUBLIÉE PAR UN AUTRE BÉNÉVOLE — figure dans le fil ci-dessous ; n'en reproduis rien :"
+      : "RÉPONSE DÉJÀ PUBLIÉE PAR LE PRODUCT EXPERT — à ne surtout pas reformuler :"}
 """
 ${previousAnswer || '(non disponible : appuie-toi sur le fil ci-dessous pour déduire ce qui a déjà été dit)'}
 """

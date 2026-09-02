@@ -103,6 +103,39 @@
       cursor: not-allowed;
     }
     
+    .input-wrapper {
+      position: relative;
+      margin-bottom: 8px;
+    }
+    
+    .input-wrapper input {
+      margin-bottom: 0;
+      padding-right: 36px;
+    }
+    
+    button.toggle-visibility {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: transparent;
+      border: none;
+      padding: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      color: #5f6368;
+      border-radius: 4px;
+      line-height: 1;
+    }
+    
+    button.toggle-visibility:hover {
+      background: rgba(0, 0, 0, 0.05);
+    }
+    
+    button.toggle-visibility:active {
+      transform: translateY(-50%) scale(0.95);
+    }
+
     .status {
       margin-top: 8px;
       font-size: 0.85rem;
@@ -116,6 +149,22 @@
     
     .error {
       color: #d93025;
+    }
+
+    textarea.closing-input {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 0.85rem;
+      resize: vertical;
+      line-height: 1.5;
+    }
+
+    .hint {
+      font-size: 0.75rem;
+      color: var(--text-light);
+      margin: 4px 0 0;
     }
     
     .loader {
@@ -142,7 +191,10 @@
     
     <div class="input-group">
       <label for="apiKey">Clé d'API Gemini</label>
-      <input type="password" id="apiKey" placeholder="AIzaSy...">
+      <div class="input-wrapper">
+        <input type="password" id="apiKey" placeholder="AIzaSy...">
+        <button type="button" class="toggle-visibility" id="toggleKeyBtn" title="Afficher/Masquer">👁️</button>
+      </div>
       
       <label for="modelName" style="margin-top:8px;">Modèle à utiliser</label>
       <input type="text" id="modelName" placeholder="ex: gemini-3.7-flash">
@@ -162,7 +214,10 @@
 
     <div class="input-group">
       <label for="sharedSecret">Secret</label>
-      <input type="text" id="sharedSecret" placeholder="Cliquez sur Générer">
+      <div class="input-wrapper">
+        <input type="password" id="sharedSecret" placeholder="Cliquez sur Générer">
+        <button type="button" class="toggle-visibility" id="toggleSecretBtn" title="Afficher/Masquer">👁️</button>
+      </div>
       <button id="genBtn" onclick="generateSecret()" style="margin-top:8px; background:#5f6368;">
         <span>🎲 Générer un nouveau secret</span>
       </button>
@@ -171,17 +226,24 @@
   </div>
 
   <div class="card">
-    <h2>Formules de clôture</h2>
-    <p>La phrase qui précède votre signature. <b>Écrivez les vôtres</b> : une par ligne, tirées au hasard sans répétition immédiate.</p>
-    <p style="font-size:0.8rem;">Un tiret seul (<code>-</code>) sur une ligne = aucune formule, le message s'arrête sur le fond.</p>
+    <h2>Signature</h2>
+    <p>Le nom apposé au bas de chaque message généré, dans toutes les langues.</p>
+    <p class="hint">Laissez vide pour ne pas signer : le message s'arrête alors sur sa formule de clôture.</p>
 
     <div class="input-group">
-      <label for="closingsFr">Français</label>
-      <textarea id="closingsFr" rows="4" style="padding:10px 12px; border:1px solid var(--border); border-radius:8px; font-family:inherit; font-size:0.85rem; resize:vertical; line-height:1.5;"></textarea>
+      <label for="signature">Nom affiché en fin de message</label>
+      <input type="text" id="signature" placeholder="ex. Fabrice">
+      <div id="signatureStatus" class="status"></div>
+    </div>
+  </div>
 
-      <label for="closingsEn" style="margin-top:8px;">Anglais</label>
-      <textarea id="closingsEn" rows="4" style="padding:10px 12px; border:1px solid var(--border); border-radius:8px; font-family:inherit; font-size:0.85rem; resize:vertical; line-height:1.5;"></textarea>
+  <div class="card">
+    <h2>Formules de clôture</h2>
+    <p>La phrase qui précède votre signature. <b>Écrivez les vôtres</b> : une par ligne, tirées au hasard sans répétition immédiate.</p>
+    <p class="hint">Un tiret seul (<code>-</code>) sur une ligne = aucune formule, le message s'arrête sur le fond.</p>
 
+    <div class="input-group" id="closingsFields"></div>
+    <div class="input-group">
       <button id="saveClosingsBtn" onclick="saveSettings()" style="margin-top:8px;">Enregistrer les formules</button>
     </div>
   </div>
@@ -193,18 +255,55 @@
   </div>
 
   <script>
+    // Langues renvoyées par le serveur, mémorisées pour la sauvegarde
+    let CLOTURES = [];
+
+    /**
+     * Construit un champ de formules par langue gérée.
+     * Le HTML ne fige aucune langue : la liste vient de getSettings, elle-même
+     * dérivée des coquilles de message.
+     */
+    function construireClotures(closings) {
+      CLOTURES = closings || [];
+      const conteneur = document.getElementById('closingsFields');
+      conteneur.innerHTML = '';
+
+      CLOTURES.forEach(function(entree, index) {
+        const label = document.createElement('label');
+        label.setAttribute('for', 'closings_' + entree.lang);
+        label.textContent = entree.label;
+        if (index > 0) label.style.marginTop = '8px';
+
+        const zone = document.createElement('textarea');
+        zone.id = 'closings_' + entree.lang;
+        zone.rows = 4;
+        zone.className = 'closing-input';
+        zone.value = entree.valeur || '';
+
+        conteneur.appendChild(label);
+        conteneur.appendChild(zone);
+      });
+    }
+
     // Récupération de la config au chargement
     google.script.run.withSuccessHandler(function(settings) {
       if (settings) {
         if (settings.apiKey) document.getElementById('apiKey').value = settings.apiKey;
         if (settings.modelName) document.getElementById('modelName').value = settings.modelName;
         if (settings.sharedSecret) document.getElementById('sharedSecret').value = settings.sharedSecret;
-        if (settings.closingsFr) document.getElementById('closingsFr').value = settings.closingsFr;
-        if (settings.closingsEn) document.getElementById('closingsEn').value = settings.closingsEn;
+        document.getElementById('signature').value = settings.signature || '';
+
+        construireClotures(settings.closings);
+
         if (!settings.sharedSecret) {
           const s = document.getElementById('secretStatus');
           s.textContent = '⚠️ Aucun secret : la WebApp refuse toute requête.';
           s.className = 'status error';
+        }
+        if (!settings.signature) {
+          const sig = document.getElementById('signatureStatus');
+          sig.textContent = 'ℹ️ Aucune signature : les messages ne seront pas signés.';
+          sig.className = 'status';
         }
       }
     }).getSettings();
@@ -235,9 +334,14 @@
         apiKey: document.getElementById('apiKey').value,
         modelName: document.getElementById('modelName').value || 'gemini-3.7-flash',
         sharedSecret: document.getElementById('sharedSecret').value,
-        closingsFr: document.getElementById('closingsFr').value,
-        closingsEn: document.getElementById('closingsEn').value
+        signature: document.getElementById('signature').value
       };
+
+      // Un champ par langue gérée, sous le nom attendu par saveSettings (closingsDe...)
+      CLOTURES.forEach(function(entree) {
+        const zone = document.getElementById('closings_' + entree.lang);
+        if (zone) settings[entree.champ] = zone.value;
+      });
       const btn = document.getElementById('saveBtn');
       const loader = document.getElementById('loader');
       const text = document.getElementById('btnText');
@@ -257,6 +361,12 @@
           
           status.textContent = '✅ Configuration sauvegardée !';
           status.className = 'status success';
+
+          const sig = document.getElementById('signatureStatus');
+          sig.textContent = settings.signature.trim()
+            ? ''
+            : 'ℹ️ Aucune signature : les messages ne seront pas signés.';
+          sig.className = 'status';
           
           setTimeout(() => { status.textContent = ''; }, 3000);
         })
@@ -270,6 +380,20 @@
         })
         .saveSettings(settings);
     }
+
+    function wireToggle(buttonId, inputId) {
+      const btn = document.getElementById(buttonId);
+      const input = document.getElementById(inputId);
+      if (btn && input) {
+        btn.addEventListener('click', function() {
+          const isHidden = input.type === 'password';
+          input.type = isHidden ? 'text' : 'password';
+          btn.textContent = isHidden ? '🙈' : '👁️';
+        });
+      }
+    }
+    wireToggle('toggleKeyBtn', 'apiKey');
+    wireToggle('toggleSecretBtn', 'sharedSecret');
   </script>
 </body>
 </html>

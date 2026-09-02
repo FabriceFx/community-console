@@ -37,6 +37,40 @@ function showAbout() {
 }
 
 /**
+ * Intitulés des langues gérées, pour l'affichage du panneau de contrôle.
+ */
+const LANG_LABELS = {
+  fr: 'Français',
+  en: 'Anglais',
+  de: 'Allemand',
+  es: 'Espagnol',
+  it: 'Italien'
+};
+
+/**
+ * Liste les langues réellement gérées par les coquilles de message.
+ *
+ * Dérivée de REPLY_SHELLS plutôt que recopiée : le panneau de contrôle suit
+ * automatiquement toute langue ajoutée aux coquilles. Le panneau n'exposait que
+ * le français et l'anglais alors que cinq langues étaient gérées : les trois
+ * autres restaient bloquées sur des formules par défaut non modifiables.
+ *
+ * @returns {Array<string>} Les codes de langue, dans leur ordre de déclaration
+ */
+function languesGerees_() {
+  return (typeof REPLY_SHELLS === 'object' && REPLY_SHELLS) ? Object.keys(REPLY_SHELLS) : ['fr'];
+}
+
+/**
+ * Nom du champ transportant les formules d'une langue entre le client et le serveur.
+ * @param {string} lang Code de langue
+ * @returns {string} Par exemple « closingsDe »
+ */
+function champCloture_(lang) {
+  return 'closings' + lang.charAt(0).toUpperCase() + lang.slice(1);
+}
+
+/**
  * Expose la méthode de sauvegarde pour le HTML (Côté Client -> Serveur)
  */
 function saveSettings(settings) {
@@ -49,12 +83,17 @@ function saveSettings(settings) {
   if (settings.sharedSecret !== undefined) {
     setSharedSecret(settings.sharedSecret);
   }
-  if (settings.closingsFr !== undefined) {
-    setCustomClosings('fr', settings.closingsFr);
+  if (settings.signature !== undefined) {
+    setSignature(settings.signature);
   }
-  if (settings.closingsEn !== undefined) {
-    setCustomClosings('en', settings.closingsEn);
-  }
+
+  languesGerees_().forEach(function (lang) {
+    const champ = champCloture_(lang);
+    if (settings[champ] !== undefined) {
+      setCustomClosings(lang, settings[champ]);
+    }
+  });
+
   return true;
 }
 
@@ -62,12 +101,25 @@ function saveSettings(settings) {
  * Récupère la configuration courante (Côté Serveur -> Client)
  */
 function getSettings() {
+  // Le panneau construit ses champs à partir de cette liste : ajouter une langue
+  // aux coquilles suffit à la voir apparaître, sans toucher au HTML.
+  const closings = languesGerees_().map(function (lang) {
+    return {
+      lang: lang,
+      label: LANG_LABELS[lang] || lang.toUpperCase(),
+      champ: champCloture_(lang),
+      // Une ligne vide se saisit « - » dans l'interface : c'est ainsi qu'une clôture
+      // vide se déclare explicitement, sans être confondue avec une absence de réglage.
+      valeur: (getCustomClosings(lang) || DEFAULT_CLOSINGS_FOR_UI(lang)).join('\n').replace(/^$/gm, '-')
+    };
+  });
+
   return {
     apiKey: getGeminiApiKey(),
     modelName: getGeminiModelName(),
     sharedSecret: getSharedSecret(),
-    closingsFr: (getCustomClosings('fr') || DEFAULT_CLOSINGS_FOR_UI('fr')).join('\n').replace(/^$/gm, '-'),
-    closingsEn: (getCustomClosings('en') || DEFAULT_CLOSINGS_FOR_UI('en')).join('\n').replace(/^$/gm, '-')
+    signature: getSignature(),
+    closings: closings
   };
 }
 

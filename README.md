@@ -1,6 +1,6 @@
 # Outil de suivi Community Console (PE Tracker)
 
-[![Version](https://img.shields.io/badge/version-1.12.3-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.12.7-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Chrome MV3](https://img.shields.io/badge/Chrome-Manifest_V3-green.svg)](extension/manifest.json)
 [![Google Apps Script](https://img.shields.io/badge/Backend-Google_Apps_Script-blue.svg)](gas/)
@@ -33,7 +33,8 @@ Cet outil complet est destiné aux **Product Experts (PE) Google** pour automati
 - **Refus de répondre à côté** : Chaque thread est classé en `REPONSE`, `CLARIFICATION` ou `HORS_SUJET`. Lorsqu'un élément manque (source de données, message d'erreur, version, étapes déjà tentées), l'outil rédige une demande de précisions au lieu d'une procédure générique inapplicable.
 - **Niveau de confiance affiché** : `HAUTE`, `MOYENNE` ou `FAIBLE`, reporté dans la colonne *Notes* de la feuille et signalé par un avertissement avant publication.
 - **Alerte sur les chemins d'interface non sourcés** : Une procédure « cliquez ici puis là » rédigée sans qu'aucune source n'ait été consultée provient de la mémoire du modèle, donc d'un état passé de l'interface. Les libellés de menus Google étant fréquemment renommés ou supprimés, ces réponses sont rétrogradées en confiance faible et signalées avant publication.
-- **Formules de clôture personnalisables** : Vos propres phrases, saisies dans le panneau de contrôle, une par ligne, tirées sans répétition immédiate. Un tiret seul déclare une clôture vide : le message s'arrête alors sur le fond, sans transition artificielle avant la signature.
+- **Formules de clôture personnalisables, dans les cinq langues** : Vos propres phrases, saisies dans le panneau de contrôle, une par ligne, tirées sans répétition immédiate. Un champ est proposé pour chacune des langues gérées — français, anglais, allemand, espagnol, italien. Un tiret seul déclare une clôture vide : le message s'arrête alors sur le fond, sans transition artificielle avant la signature.
+- **Signature configurable** : Le nom apposé au bas de chaque message se saisit dans le panneau de contrôle et s'applique à toutes les langues. Laissé vide, le message n'est pas signé et s'arrête sur sa formule de clôture.
 - **Filtre anti-tics** : Suppression automatique des formules « Voici les étapes à suivre », « En résumé », « Il est important de noter que », « J'espère que cela vous aidera », des titres décoratifs et des séparateurs.
 - **Procédure officielle de récupération de compte** : Toute réponse portant sur une perte d'accès se termine par `https://g.co/recover`, avec une phrase d'introduction adaptée selon que la personne a déjà tenté la procédure ou non. Ce lien est protégé contre la validation HTTP et ne peut jamais être supprimé d'une réponse.
 - **Sources officielles systématiques** : Dès que la recherche fait remonter un article du Centre d'aide pertinent, il est cité en fin de réponse. Un lien n'est supprimé que si son inexistence est **prouvée** (404 confirmé) : un incident réseau ou un 503 ne le fait plus disparaître.
@@ -44,6 +45,7 @@ Cet outil complet est destiné aux **Product Experts (PE) Google** pour automati
 
 #### 🔐 Sécurité
 - **Secret partagé obligatoire** : La WebApp étant publiée en accès « N'importe qui », chaque requête doit présenter un secret généré depuis le panneau de contrôle.
+- **Champs sensibles masqués par défaut côté UI** : Clé API Gemini et secret partagé sont masqués (`type="password"`) avec bouton d'affichage/masquage discret (👁️/🙈) dans le panneau Google Sheets et le popup de l'extension.
 - **Clé API en en-tête HTTP** (`x-goog-api-key`) et filtrage systématique des secrets (`redactSecrets_`) dans les journaux et les messages d'erreur.
 - **Allowlist de domaine** sur l'extraction serveur : seules les URL `support.google.com` sont récupérables (protection anti-SSRF).
 
@@ -84,6 +86,10 @@ Cet outil complet est destiné aux **Product Experts (PE) Google** pour automati
 3. Dans la carte **Secret partagé**, cliquez sur **🎲 Générer un nouveau secret**, puis **Sauvegarder**.
    - ⚠️ Ce secret est **obligatoire** : la WebApp étant déployée en accès « N'importe qui », il constitue la seule barrière empêchant un tiers qui connaîtrait votre URL `/exec` d'écrire dans votre feuille et de consommer votre quota Gemini.
    - Recopiez-le ensuite dans l'extension Chrome et sur la WebApp mobile (il n'est demandé qu'une fois par appareil).
+4. Dans la carte **Signature**, saisissez le nom à apposer au bas de vos messages, puis **Sauvegarder**.
+   - Tant que ce champ est vide, les messages générés ne sont pas signés. Ce n'est pas une erreur : tous les bénévoles ne signent pas leurs réponses.
+5. Dans la carte **Formules de clôture**, remplacez les phrases proposées par les vôtres, langue par langue.
+   - Ces phrases signent votre style autant que votre nom : les valeurs livrées par défaut sont des exemples, pas des recommandations.
 
 #### ⚠️ Mettre à jour le backend
 Le projet Apps Script et l'extension Chrome se déploient **séparément**. Recharger l'extension ne met pas à jour la WebApp.
@@ -133,7 +139,8 @@ Sans cette seconde étape, la WebApp continue de servir l'ancien code : l'extens
 #### 🗣️ Response Quality & Tone
 - **Refusal to Guess**: Threads are classified into `REPONSE` (Answer), `CLARIFICATION` (Needs info), or `HORS_SUJET` (Off-topic). If essential context is missing (error logs, data sources, OS/versions), it asks targeted questions instead of generating inapplicable steps.
 - **Confidence Scoring**: `HAUTE` (High), `MOYENNE` (Medium), or `FAIBLE` (Low), logged in the *Notes* column and flagged to the user.
-- **Variable Greetings & Closings**: Multiple opening and closing shells rotated dynamically to prevent repetitive template patterns.
+- **Variable Greetings & Closings**: Multiple opening and closing shells rotated dynamically to prevent repetitive template patterns. Closings are editable from the control panel for each supported language (French, English, German, Spanish, Italian).
+- **Configurable Signature**: The name appended to every generated message is set in the control panel and applies to all languages. Left empty, messages are not signed and end on their closing sentence.
 - **Anti-AI Boilerplate Filter**: Automatically removes conversational filler ("Here are the steps to follow", "In summary", "It is important to note that", "I hope this helps", decorative markdown headers).
 - **Official Account Recovery Protocol**: Any loss-of-access query finishes with `https://g.co/recover`, customized depending on whether the user has already attempted recovery. This trusted link bypasses network pruning and is never omitted.
 - **Verified Official Sources**: Cites official Google Help Center articles discovered via real-time search grounding. Links are only dropped when verified as 404 dead links (network errors or 5xx preserve the link).
@@ -142,6 +149,7 @@ Sans cette seconde étape, la WebApp continue de servir l'ancien code : l'extens
 
 #### 🔐 Security
 - **Mandatory Shared Secret**: Since the WebApp is deployed as "Anyone", incoming requests must provide a shared secret token generated from the control panel.
+- **Masked UI Fields with Visibility Toggle**: Gemini API key and shared secret are masked by default (`type="password"`) with an eye toggle (👁️/🙈) in both the Google Sheets sidebar and Chrome extension popup.
 - **API Key via HTTP Header** (`x-goog-api-key`) and automated secret scrubbing (`redactSecrets_`) in logs and exception traces.
 - **Server Domain Allowlist**: Restricts server-side fetching strictly to `support.google.com` (anti-SSRF).
 
@@ -174,6 +182,8 @@ Sans cette seconde étape, la WebApp continue de servir l'ancien code : l'extens
 3. Under the **Secret partagé** card, click **🎲 Générer un nouveau secret**, then **Sauvegarder**.
    - ⚠️ This secret is **mandatory**: it protects your WebApp endpoint from unauthorized access and quota exhaustion.
    - Copy this secret to use in the Chrome extension and Mobile WebApp.
+4. Under the **Signature** card, enter the name to append to your messages, then **Sauvegarder**. Leave it empty to send unsigned messages.
+5. Under the **Formules de clôture** card, replace the shipped sentences with your own, language by language.
 
 #### 3. Chrome Extension Installation
 1. Open Chrome and navigate to `chrome://extensions/`.
@@ -185,8 +195,9 @@ Sans cette seconde étape, la WebApp continue de servir l'ancien code : l'extens
 
 ### 🧪 Tests
 
-Le backend Apps Script est couvert par une suite de tests unitaires et d'intégration sans dépendance externe (services Google simulés) :
-The Apps Script backend is covered by an automated test suite with mock Google services:
+Le backend Apps Script et l'extension sont couverts par 28 suites de tests automatisés sans dépendance externe (services Google simulés dans une VM Node.js, validant le cycle de vie `doPost`, le backend mobile, le formatage RichText, le masquage PII, la résilience réseau, l'aller-retour du panneau de contrôle et les signatures configurables) :
+
+The Apps Script backend and extension are covered by 28 automated test suites without external dependencies (mocked Google services in Node.js VM validating the `doPost` lifecycle, mobile backend, RichText conversion, PII masking, network resilience, control panel roundtrip, and configurable signatures):
 
 ```bash
 npm test

@@ -10,7 +10,8 @@ function makeSandbox(publishedCol) {
       if (mode === '500')    return {getResponseCode:()=>503,getHeaders:()=>({}),getContentText:()=>''};
       return {getResponseCode:()=> url.includes('inexistant') ? 404 : 200, getHeaders:()=>({}), getContentText:()=>''};
     }},
-    PropertiesService:(()=>{const s={};const o={getProperty:k=>s[k]||null,setProperty:(k,v)=>{s[k]=v;}};return{getScriptProperties:()=>o,getUserProperties:()=>o};})(),
+    // stripReplyShell_ repère la signature configurée, plus un prénom en dur
+    PropertiesService:(()=>{const s={PE_SIGNATURE:'Fabrice'};const o={getProperty:k=>s[k]||null,setProperty:(k,v)=>{s[k]=v;},deleteProperty:k=>{delete s[k];}};return{getScriptProperties:()=>o,getUserProperties:()=>o};})(),
     CacheService:{ getScriptCache:()=>({get:()=>null,put(){},remove(){}}) },
     Utilities:{sleep(){},getUuid:()=>'x'},
     SpreadsheetApp:{

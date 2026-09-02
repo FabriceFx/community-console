@@ -2,6 +2,75 @@
 
 Toutes les modifications notables apportées à ce projet sont documentées dans ce fichier.
 
+## [1.12.7] - 2026-09-02
+
+### ✍️ Signature configurable et formules de clôture dans les cinq langues
+
+> **« Tout Product Expert qui installait l'outil signait ses réponses du prénom de son auteur. »**
+> Le projet est publié sous licence MIT et son README s'adresse aux Product Experts en général. La signature était pourtant codée en dur à quatre endroits, et le panneau de contrôle n'exposait que deux des cinq langues gérées.
+
+- **Signature configurable (`getSignature` / `setSignature`)** : Le nom apposé au bas des messages se saisit dans le panneau de contrôle et s'applique à tous les points d'entrée — extension, WebApp mobile, relance manuelle depuis la feuille. Il était auparavant écrit en dur dans les deux assemblages de message, dans l'assemblage de relance, et dans la reconnaissance de fin de message de `stripReplyShell_` : un autre bénévole voyait sa signature conservée dans les exemples de style envoyés au modèle, puisque celui-ci ne savait plus où son message se terminait.
+- **Signature vide assumée** : Tous les bénévoles ne signent pas leurs messages. Sans signature configurée, la réponse s'arrête sur sa formule de clôture, sans ligne vide résiduelle. Le panneau l'indique explicitement plutôt que de laisser croire à un réglage oublié.
+- **Échappement de la signature (`echapperRegex_`)** : Le champ est libre. Une signature du type `J. Martin (PE)` était interprétée comme une expression régulière lors du repérage de fin de message.
+- **Formules de clôture dans les cinq langues (`Ui.gs`, `Sidebar.html`)** : Le panneau n'offrait un champ que pour le français et l'anglais, alors que `REPLY_SHELLS` gère aussi l'allemand, l'espagnol et l'italien. Ces trois langues restaient bloquées sur des formules par défaut non modifiables — dont deux des trois françaises reprennent précisément les tournures que le prompt interdit dans le corps du message.
+- **Liste de langues dérivée, non recopiée (`languesGerees_`)** : Le panneau construit ses champs à partir des coquilles de message. Ajouter une langue à `REPLY_SHELLS` la fait apparaître dans l'interface sans toucher au HTML.
+- **2 nouvelles suites de tests (27 et 28)** :
+  - `tests/27-signature-configurable.test.js` : Signature apposée, effacée, à caractères spéciaux ; assemblages de réponse et de relance ; retrait de la coquille pour les exemples de style.
+  - `tests/28-panneau-de-controle.test.js` : Aller-retour complet du panneau — le `<script>` de `Sidebar.html` est extrait et exécuté contre le vrai code serveur. Vérifie qu'un champ existe pour chaque langue gérée, que la saisie est persistée, relue à la réouverture, et qu'elle atteint réellement le message généré. Un champ ajouté d'un seul côté ne peut plus passer inaperçu.
+- **Simulacre de propriétés complété (`tests/23`)** : `deleteProperty` manquait au service simulé, alors que le code réel s'en sert pour effacer un réglage vidé.
+- **Couverture totale** : 28 fichiers de test unitaire, 100 % verts (`node tests/run.js`).
+
+## [1.12.6] - 2026-09-02
+
+### 🔗 Sources préservées, diagnostic réellement différé et identité stable des fils
+
+> **« Le point final était bien retiré du lien cliquable — mais le lien avait déjà été supprimé une étape plus tôt. »**
+> La v1.12.5 traitait la ponctuation dans `formatMarkdownToRichText`, au moment de l'écriture dans la feuille. Or `cleanAndValidateUrls` s'exécute avant, et testait l'URL avec son point collé : le serveur répondait 404, le lien disparaissait, et la phrase qui l'introduisait se terminait dans le vide.
+
+- **Sources du Centre d'aide conservées en fin de phrase (`cleanAndValidateUrls`)** : La ponctuation finale est désormais mise de côté **avant** toute vérification, et plus seulement pour les liens de confiance. Un article pourtant remonté par `googleSearch` était interrogé sous la forme `.../answer/8253.`, jugé mort, puis supprimé — le message publié se terminant sur « la marche à suivre est décrite sur ». La comparaison au grounding se fait maintenant sur l'URL nue, celle que `googleSearch` a réellement renvoyée.
+- **Reprises différées du diagnostic (`diagnostiquerUneFois`)** : Le drapeau « déjà affiché » était posé avant la branche de reprise et n'était jamais rendu. La garde de tête coupait court à tous les appels suivants : le compteur restait bloqué à 1, les onze autres essais n'avaient jamais lieu, aucun diagnostic ne s'affichait sur une page au rendu tardif, et `analyseTerminee` ne passant jamais à `true`, le fil était réanalysé — un `innerText` sur toute la page — à chaque mutation du DOM.
+- **Identité stable d'un fil (`normaliserUrlFil_`)** : Le rapprochement avec la feuille se faisait sur l'URL brute. `?hl=fr` posé par le sélecteur de langue, `?msgid=...` d'un lien de notification, une ancre `#reply` ou un titre remanié désignaient donc des fils différents : doublons dans la feuille, relances refusées par « ce thread n'est pas encore suivi », et réponses retouchées jamais enregistrées — la boucle d'apprentissage du style restait vide sans que rien ne le signale. Le numéro qui suit `/thread/` sert désormais de clé, des deux côtés de la comparaison.
+- **Clé API acceptée sur les relances (`generateFollowUp`)** : `generateReply` acceptait une clé transmise par l'appelant, `generateFollowUp` non. Un Product Expert ayant configuré sa clé uniquement dans l'extension voyait toutes ses relances échouer sur « Clé API Gemini manquante », sans rapport apparent avec la génération initiale qui, elle, fonctionnait. La clé reste utilisée pour la seule requête en cours et n'est jamais persistée.
+- **Messages d'exception expurgés (`doPost`, `getStyleExamples_`)** : Le filet `catch` de `doPost` renvoyait `error.toString()` tel quel au client et dans les journaux, alors qu'il attrape aussi les exceptions d'`UrlFetchApp`, dont le message contient l'URL appelée. Les deux points restants passent maintenant par `redactSecrets_`, conformément à la règle du projet.
+- **Extraction DOM unifiée (`extraireInfosThread`)** : Le parcours « Suivre dans Sheets » réimplémentait à l'identique les quarante lignes d'extraction déjà présentes dans `extraireInfosThread`, utilisées par le parcours de relance. Toute correction de sélecteur devait être portée aux deux endroits, et l'oubli n'était visible dans aucun test.
+- **3 nouvelles suites de tests (24 à 26)** :
+  - `tests/24-diagnostic-differe.test.js` : Enchaînement réel des douze essais sur une page non rendue, clôture de l'analyse à l'épuisement du quota, et aboutissement immédiat sur une page complète.
+  - `tests/25-identite-du-fil.test.js` : Formes équivalentes d'une même URL de fil, non-confusion de fils distincts, et rapprochement dans la feuille depuis chacune de ces formes.
+  - `tests/26-sources-ponctuees.test.js` : Survie des sources sourcées ponctuées, sous un serveur simulé répondant 404 aux URL suffixées d'une ponctuation. Les liens réellement morts restent supprimés.
+- **Assertions de test délivrées de la forme du code** : Deux vérifications de `14-cablage-boutons` et `18-notifications-parasites` figeaient textuellement la ligne fautive du diagnostic. Elles portent désormais sur le comportement attendu, le comportement complet étant couvert par la suite 24.
+- **Couverture totale** : 26 fichiers de test unitaire, 100 % verts (`node tests/run.js`).
+
+## [1.12.5] - 2026-09-02
+
+### 🛡️ Bouclier de Sécurité UI, Résilience Backend et Suite de Tests Exhaustive
+
+> **« Tout semble bien marcher en production... jusqu'au jour où un lien brisé ou une fuite de secret survient en silence. »**
+> On pense souvent qu'un backend Apps Script n'a pas besoin d'une batterie de tests complète tant qu'il répond aux clics de l'extension. Mais un point final capturé par mégarde dans une URL officielle invalide un lien de dépannage crucial, un secret affiché en clair sur un écran partagé compromet un quota, et un numéro de téléphone avec indicatif international laisse fuiter une donnée privée dans les historiques.
+
+- **Masquage et bascule de visibilité des secrets UI (`gas/Sidebar.html`)** : Les champs sensibles (Clé d'API Gemini et Secret partagé) sont désormais masqués par défaut sous forme de mot de passe (`type="password"`). Un bouton interactif afficher/masquer (👁️/🙈) permet de les vérifier ou de les copier sans risque d'exposition visuelle lors de partages d'écran ou d'enregistrements vidéo.
+- **Nettoyage de la ponctuation finale sur les liens bruts (`gas/Gemini.gs`)** : Dans `formatMarkdownToRichText`, les signes de ponctuation résiduels (`.`, `,`, `;`, `:`, `!`, `?`) placés en fin d'URL brute (par exemple `https://g.co/recover.`) sont désormais exclus du lien cliquable RichText tout en étant conservés dans le texte affiché. Les liens officiels insérés en fin de phrase restent ainsi rigoureusement fonctionnels.
+- **Anonymisation téléphonique universelle (`gas/Gemini.gs`)** : L'expression régulière de masquage PII (`sanitizePii`) prend désormais en compte les numéros avec séparateur ou espace suivant l'indicatif international (ex: `+33 1 40 50 60 70` ou `+33 6 12 34 56 78`).
+- **4 nouvelles suites de tests automatisés (20 à 23)** :
+  - `tests/20-formatage-richtext.test.js` : Validation de la conversion Markdown vers Google Sheets RichText, nettoyage syntaxique, suppression des séparateurs décoratifs et application conjointe des styles gras et hyperliens.
+  - `tests/21-backend-dopost.test.js` : Simulation complète de l'environnement Google Apps Script (`SpreadsheetApp`, `ContentService`, `LockService`, `PropertiesService`) pour valider la sécurité du webhook `doPost`, l'authentification par secret, les actions `recordPublished`, `registerOnly`, `followUp`, la détection des doublons et l'auto-migration des colonnes (`ensureColumns_`).
+  - `tests/22-mobile-backend.test.js` : Validation de bout en bout du traitement mobile (`processMobileThreadUrl`), filtrage anti-SSRF sur l'hôte, détection automatique du produit par URL, heuristiques d'extraction du titre, contenu et des 4 stratégies d'auteur.
+  - `tests/23-securite-et-resilience.test.js` : Vérification du masquage PII, assainissement des logs (`redactSecrets_`), résilience des retries HTTP avec backoff exponentiel (`fetchWithRetry`), contournement des redirections Vertex AI et persistance des paramètres (`Ui.gs`).
+- **Couverture totale** : 23 fichiers de test unitaire, 100% verts (`node tests/run.js`), exécutables localement en moins de 3 secondes sans aucune dépendance externe.
+
+## [1.12.4] - 2026-08-15
+
+### 🎣 Repêchage de la Réponse Précédente dans le Fil
+
+> **« Votre réponse précédente n'est pas enregistrée dans la feuille. »**
+> L'avertissement était exact mais la situation absurde : l'extension avait ce texte sous les yeux dans le fil, puisqu'elle s'en sert déjà pour savoir où s'arrête la réponse du Product Expert.
+
+- **Message de référence conservé (`isolerRelanceStructuree`)** : L'isolement retenait la position de la réponse du Product Expert sans en garder le texte. Il est désormais renvoyé sous `messagePe`.
+- **Transmission au backend (`previousAnswerFromThread`)** : Le texte relevé accompagne la demande de relance, sur les deux parcours — fil déjà suivi et fil inscrit à la volée.
+- **Ordre de préférence explicite** : Colonne *Réponse publiée*, à défaut la proposition enregistrée, à défaut le texte relevé dans le fil. Le garde-fou anti-redite dispose ainsi d'une référence dans tous les cas.
+- **Amorçage du corpus de style** : Une réponse rédigée entièrement hors de l'outil est le meilleur exemple de style qui soit — elle est intégralement de la plume du Product Expert. Elle est donc enregistrée en colonne *Réponse publiée* lorsque celle-ci est vide, ce qui permet au corpus de se constituer depuis des fils jamais passés par l'outil.
+- **Avertissement réservé aux vraies impasses** : Il ne s'affiche plus que si la réponse est introuvable à la fois dans la feuille et dans le fil. Le repêchage réussi est simplement journalisé.
+- **Couverture de test (`tests/19-repechage-reponse.test.js`)** : 15 cas sur les trois sources et leur ordre de priorité.
+
 ## [1.12.3] - 2026-08-15
 
 ### 🔀 Détection d'un Backend Non Redéployé

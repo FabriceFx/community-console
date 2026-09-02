@@ -7,7 +7,7 @@ const CONFIG = {
   // L'extension la compare à la sienne : le projet Apps Script et l'extension se
   // déploient séparément, et un backend resté en arrière produit des comportements
   // incompréhensibles côté navigateur.
-  VERSION: "1.12.3",
+  VERSION: "1.12.7",
 
   // Nom de la feuille de calcul principale
   SHEET_NAME: "Suivi Questions",
@@ -221,6 +221,39 @@ function setCustomClosings(lang, text) {
   }
 
   props.setProperty('PE_CLOSINGS_' + lang, clean);
+}
+
+/**
+ * Récupère la signature apposée au bas des messages générés.
+ *
+ * Stockée dans les propriétés du SCRIPT, comme le secret partagé et les formules de
+ * clôture : la WebApp s'exécute au nom du propriétaire pour des appelants anonymes,
+ * et la signature doit être la même quel que soit le point d'entrée — extension,
+ * WebApp mobile ou relance manuelle depuis la feuille.
+ *
+ * Une signature vide est un choix légitime : tous les bénévoles ne signent pas leurs
+ * messages, et le message s'arrête alors sur sa formule de clôture.
+ *
+ * @returns {string} La signature, ou une chaîne vide si aucune n'est configurée
+ */
+function getSignature() {
+  return String(PropertiesService.getScriptProperties().getProperty('PE_SIGNATURE') || '').trim();
+}
+
+/**
+ * Enregistre la signature apposée au bas des messages générés.
+ * @param {string} signature Le prénom ou le nom à apposer ; vide pour ne pas signer
+ */
+function setSignature(signature) {
+  const props = PropertiesService.getScriptProperties();
+  const clean = String(signature || '').trim();
+
+  if (!clean) {
+    props.deleteProperty('PE_SIGNATURE');
+    return;
+  }
+
+  props.setProperty('PE_SIGNATURE', clean);
 }
 
 /**

@@ -6,7 +6,9 @@ const DEAD  = 'https://support.google.com/docs/answer/999999999';
 const sandbox = {
   console: { warn(){}, error(){}, log(){} },
   UrlFetchApp: { fetch(url){ return { getResponseCode: () => url === VALID ? 200 : 404, getHeaders: () => ({}), getContentText: () => '' }; } },
-  PropertiesService: (() => { const store = {}; const svc = { getProperty: k => store[k] || null, setProperty: (k,v) => { store[k]=v; } };
+  // La signature n'est plus codée en dur : le test la configure comme le ferait
+  // le panneau de contrôle, puis vérifie qu'elle est bien apposée.
+  PropertiesService: (() => { const store = { PE_SIGNATURE: 'Fabrice' }; const svc = { getProperty: k => store[k] || null, setProperty: (k,v) => { store[k]=v; }, deleteProperty: k => { delete store[k]; } };
     return { getScriptProperties: () => svc, getUserProperties: () => svc }; })(),
   Utilities: { sleep(){}, getUuid: () => 'aaaaaaaa-bbbb' },
   SpreadsheetApp: { newRichTextValue: () => ({ setText(){ return this; }, build(){ return {}; } }) },

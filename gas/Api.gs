@@ -156,8 +156,11 @@ function doPost(e) {
     });
 
   } catch (error) {
-    console.error("Erreur critique dans doPost :", error);
-    return jsonOutput_({ status: "error", message: error.toString() });
+    // Ce filet attrape aussi les exceptions d'UrlFetchApp, dont le message contient
+    // l'URL appelée : il traverse redactSecrets_ avant d'être journalisé ET renvoyé.
+    const message = redactSecrets_(error);
+    console.error("Erreur critique dans doPost : " + message);
+    return jsonOutput_({ status: "error", message: message });
   }
 }
 
@@ -281,13 +284,40 @@ function recordPublishedReply_(threadUrl, publishedText) {
 }
 
 /**
+ * Réduit une URL de fil à son identité stable.
+ *
+ * Une même question se présente sous plusieurs URL : `?hl=fr` ajouté par le sélecteur
+ * de langue, `?msgid=...` sur un lien de notification, une ancre `#reply`, un libellé
+ * de titre remanié après édition. Comparées telles quelles, ces formes désignaient
+ * des fils différents : la feuille se remplissait de doublons, la relance répondait
+ * « ce thread n'est pas encore suivi », et la réponse retouchée n'était jamais
+ * enregistrée — la boucle d'apprentissage du style restait vide sans raison visible.
+ *
+ * Le numéro qui suit /thread/ identifie le fil à lui seul.
+ *
+ * @param {string} url L'URL telle qu'observée dans le navigateur
+ * @returns {string} La forme canonique servant de clé de rapprochement
+ */
+function normaliserUrlFil_(url) {
+  const brut = String(url || '').trim().split('#')[0].split('?')[0].replace(/\/+$/, '');
+  if (!brut) return '';
+
+  const fil = brut.match(/^(.*\/thread\/\d+)(?:\/|$)/i);
+  return (fil ? fil[1] : brut).toLowerCase();
+}
+
+/**
  * Retrouve la ligne d'un thread par son URL, en partant de la fin.
+ *
+ * Le rapprochement se fait sur la forme canonique des deux côtés : une ligne créée
+ * depuis une URL portant `?hl=fr` reste retrouvable depuis l'URL nue, et inversement.
+ *
  * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet La feuille de suivi
  * @param {string} url L'URL recherchée
  * @returns {number} Le numéro de ligne, ou -1 si le thread n'est pas suivi
  */
 function trouverLigneParUrl_(sheet, url) {
-  const cible = String(url || '').trim();
+  const cible = normaliserUrlFil_(url);
   if (!cible) return -1;
 
   const lastRow = sheet.getLastRow();
@@ -295,7 +325,7 @@ function trouverLigneParUrl_(sheet, url) {
 
   const urls = sheet.getRange(2, CONFIG.COL.URL, lastRow - 1, 1).getValues();
   for (let i = urls.length - 1; i >= 0; i--) {
-    if (String(urls[i][0] || '').trim() === cible) return i + 2;
+    if (normaliserUrlFil_(urls[i][0]) === cible) return i + 2;
   }
   return -1;
 }
@@ -438,7 +468,11 @@ function handleFollowUp_(data) {
   const idx = (n) => ligne[n - 1];
 
   // La réponse réellement publiée prime sur la proposition : c'est ce que la personne a lu.
-  const previousAnswer = String(idx(CONFIG.COL.PUBLISHED) || idx(CONFIG.COL.SUMMARY) || '').trim();
+  // En dernier recours, le texte relevé dans le fil par l'extension : une réponse rédigée
+  // hors de l'outil n'a laissé aucune trace dans la feuille, mais figure bien sur le forum.
+  const depuisFeuille = String(idx(CONFIG.COL.PUBLISHED) || idx(CONFIG.COL.SUMMARY) || '').trim();
+  const depuisFil = String(data.previousAnswerFromThread || '').trim();
+  const previousAnswer = depuisFeuille || depuisFil;
 
   const reply = generateFollowUp({
     question: idx(CONFIG.COL.QUESTION) || idx(CONFIG.COL.TITLE),
@@ -446,6 +480,10 @@ function handleFollowUp_(data) {
     followUp: followUpText,
     author: idx(CONFIG.COL.AUTHOR),
     product: idx(CONFIG.COL.PRODUCT),
+    // Comme pour la génération initiale : la clé transmise sert à cette requête et
+    // n'est pas persistée. Elle est indispensable quand la clé n'est configurée que
+    // dans l'extension et non dans le panneau de contrôle.
+    apiKey: String(data.apiKey || '').trim(),
     // Détermine le cadrage : réponse à une relance, ou première intervention
     // sur un fil auquel un autre bénévole a déjà répondu.
     peADejaRepondu: data.peADejaRepondu !== false
@@ -457,6 +495,14 @@ function handleFollowUp_(data) {
   }
 
   try {
+    // Une réponse rédigée entièrement à la main, absente de la feuille, est le meilleur
+    // exemple de style qui soit : elle est intégralement de la plume du Product Expert.
+    // On la conserve, ce qui amorce le corpus depuis des fils traités hors de l'outil.
+    if (!depuisFeuille && depuisFil) {
+      sheet.getRange(targetRow, CONFIG.COL.PUBLISHED).setValue(depuisFil);
+      invalidateStyleExamplesCache_();
+    }
+
     // La proposition courante remplace le contenu de la colonne d'action ;
     // la réponse déjà publiée reste conservée en colonne « Réponse publiée ».
     if (reply.text) {
@@ -483,7 +529,9 @@ function handleFollowUp_(data) {
     repeatsPrevious: !!reply.repeatsPrevious,
     overlap: reply.overlap || 0,
     truncated: !!reply.truncated,
-    hadPreviousAnswer: !!previousAnswer
+    hadPreviousAnswer: !!previousAnswer,
+    // Précise d'où vient le contexte, pour que l'avertissement reste juste
+    previousAnswerSource: depuisFeuille ? 'feuille' : (depuisFil ? 'fil' : 'aucune')
   });
 }
 

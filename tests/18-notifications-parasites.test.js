@@ -147,7 +147,10 @@ check3('un nombre en début de phrase utile est conservé',
 console.log('\nLe diagnostic tolère un rendu différé');
 check3('un plafond de tentatives est défini',   src, t => t.includes('MAX_TENTATIVES_DIAGNOSTIC'));
 check3('les essais infructueux sont comptés',   src, t => t.includes('tentativesDiagnostic++'));
-check3('sortie discrète tant que le quota tient', src, t => t.includes('if (tentativesDiagnostic < MAX_TENTATIVES_DIAGNOSTIC) return;'));
+check3('sortie discrète tant que le quota tient', src, t => /if \(tentativesDiagnostic < MAX_TENTATIVES_DIAGNOSTIC\) \{[\s\S]{0,300}?return;/.test(t));
+// Cette sortie doit rendre la main au diagnostic : sans cela un seul essai a lieu.
+// Le comportement complet est vérifié dans 24-diagnostic-differe.test.js.
+check3('la sortie réarme le diagnostic', src, t => /if \(tentativesDiagnostic < MAX_TENTATIVES_DIAGNOSTIC\) \{[\s\S]{0,300}?diagnosticAffiche = false;/.test(t));
 check3('des reprises différées sont programmées', src, t => t.includes('setTimeout(initTracker, 4000)') && t.includes('setTimeout(initTracker, 9000)'));
 
 console.log('\nLes messages d\'information ne polluent pas la page d\'erreurs');

@@ -18,6 +18,8 @@ Conséquences à respecter lors de toute évolution :
 - Le contrat de sortie du modèle (`LANG` / `STATUT` / `CONFIANCE` puis `---`) est analysé par `parseModelEnvelope_` ; toute modification du prompt doit préserver ce format.
 - Les formules d'accueil et de clôture doivent rester **variables** (`REPLY_SHELLS`) : une coquille figée rend la série de réponses reconnaissable.
 - Le prénom de l'auteur ne doit apparaître **qu'une seule fois** par message.
+- La signature du Product Expert et ses formules de clôture sont des **réglages** (`getSignature`, `getCustomClosings`), jamais des constantes. L'outil est publié sous licence MIT : une valeur codée en dur signe les réponses de tous ses utilisateurs du nom d'un seul, et `stripReplyShell_` ne reconnaît plus la fin de leurs messages.
+- Toute langue ajoutée à `REPLY_SHELLS` doit rester configurable : le panneau de contrôle dérive ses champs de cette liste (`languesGerees_`), il ne faut pas y recopier de langue en dur.
 - Aucune publication automatique : la proposition est placée dans le champ de réponse, jamais envoyée.
 
 ## Sécurité

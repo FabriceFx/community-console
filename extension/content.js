@@ -912,9 +912,15 @@ function diagnostiquerUneFois() {
 
     // Tant que le quota d'essais n'est pas épuisé, l'absence de contenu signifie
     // simplement que la page n'a pas fini de se construire : rien à signaler.
-    if (tentativesDiagnostic < MAX_TENTATIVES_DIAGNOSTIC) return;
+    // Le drapeau doit être RENDU à false, sinon la garde de tête coupe court à tous
+    // les appels suivants : le compteur restait bloqué à 1, les onze autres essais
+    // n'avaient jamais lieu, aucun diagnostic ne s'affichait, et `analyseTerminee`
+    // ne passant jamais à true, le fil était réanalysé à chaque mutation du DOM.
+    if (tentativesDiagnostic < MAX_TENTATIVES_DIAGNOSTIC) {
+      diagnosticAffiche = false;
+      return;
+    }
 
-    diagnosticAffiche = true;
     analyseTerminee = true;
     // console.log et non console.warn : un avertissement émis par un content script est
     // consigné comme une erreur dans la page des extensions, ce qui alarme sans raison.
@@ -1032,7 +1038,14 @@ function isolerRelanceStructuree(messages, nomPe, reponsePe) {
   if (nomPe) {
     for (let i = messages.length - 1; i >= 0; i--) {
       if (memeAuteur(messages[i].author, nomPe)) {
-        return { messages: messages.slice(i + 1), methode: 'nom du Product Expert', fiable: true };
+        return {
+          messages: messages.slice(i + 1),
+          methode: 'nom du Product Expert',
+          fiable: true,
+          // Le message du Product Expert lui-même : c'est ce que la personne a lu,
+          // et donc la référence pour ne pas le reformuler.
+          messagePe: messages[i]
+        };
       }
     }
   }
@@ -1048,14 +1061,19 @@ function isolerRelanceStructuree(messages, nomPe, reponsePe) {
         const courant = normaliser(messages[i].text);
         const communs = motsRef.filter((m) => courant.indexOf(m) !== -1).length;
         if (communs / motsRef.length >= 0.5) {
-          return { messages: messages.slice(i + 1), methode: 'contenu de votre réponse', fiable: true };
+          return {
+            messages: messages.slice(i + 1),
+            methode: 'contenu de votre réponse',
+            fiable: true,
+            messagePe: messages[i]
+          };
         }
       }
     }
   }
 
   // 3. Repli : le dernier message, sans certitude sur son auteur
-  return { messages: messages.slice(-1), methode: 'dernier message du fil', fiable: false };
+  return { messages: messages.slice(-1), methode: 'dernier message du fil', fiable: false, messagePe: null };
 }
 
 /**
@@ -1151,7 +1169,7 @@ function creerBoutonRelance(premiereIntervention) {
   const libelleInitial = btn.innerHTML;
 
   btn.addEventListener('click', async () => {
-    const config = await getStorage(['webappUrl', 'sharedSecret', 'peDisplayName']);
+    const config = await getStorage(['webappUrl', 'sharedSecret', 'peDisplayName', 'geminiApiKey']);
     if (!config.webappUrl || !config.sharedSecret) {
       alert("Configurez d'abord l'URL de la WebApp et le secret partagé dans les options de l'extension.");
       return;
@@ -1206,6 +1224,10 @@ function creerBoutonRelance(premiereIntervention) {
           followUpText: relance.substring(0, MAX_CONTENT),
           locked: filVerrouille(),
           peADejaRepondu: !premiereIntervention,
+          // Repêchage : si la feuille n'a pas gardé trace de la réponse publiée,
+          // le fil, lui, la contient toujours.
+          previousAnswerFromThread: isolation.messagePe ? isolation.messagePe.text.substring(0, MAX_CONTENT) : '',
+          apiKey: config.geminiApiKey || '',
           secret: config.sharedSecret
         }
       });
@@ -1251,6 +1273,8 @@ function creerBoutonRelance(premiereIntervention) {
             followUpText: relance.substring(0, MAX_CONTENT),
             locked: filVerrouille(),
             peADejaRepondu: !premiereIntervention,
+            previousAnswerFromThread: isolation.messagePe ? isolation.messagePe.text.substring(0, MAX_CONTENT) : '',
+            apiKey: config.geminiApiKey || '',
             secret: config.sharedSecret
           }
         });
@@ -1271,7 +1295,9 @@ function creerBoutonRelance(premiereIntervention) {
         alert("⚠️ Redite détectée\n\nLa proposition reprend " + data.overlap + " % de votre réponse précédente. La personne vient justement d'indiquer que cela n'a pas fonctionné : réécrivez ce texte plutôt que de le publier.");
       }
       if (!data.hadPreviousAnswer) {
-        alert("ℹ️ Votre réponse précédente n'est pas enregistrée dans la feuille.\n\nLa proposition a été rédigée sans savoir précisément ce que vous aviez déjà écrit : relisez-la attentivement pour éviter une redite.");
+        alert("ℹ️ Votre réponse précédente n'a pas pu être retrouvée\n\nNi dans la feuille, ni dans le fil. La proposition a donc été rédigée sans savoir ce que vous aviez déjà écrit : relisez-la attentivement pour éviter une redite.");
+      } else if (data.previousAnswerSource === 'fil') {
+        console.log("%c[PE Tracker] Réponse précédente relevée dans le fil et enregistrée dans la feuille.", 'color:#0f9d58');
       }
       if (data.truncated) {
         alert("❌ Réponse incomplète : ne publiez pas ce texte tel quel.");
@@ -1348,56 +1374,10 @@ function creerBoutonPrincipal() {
         return;
       }
 
-      let title = "Titre inconnu";
-      let author = "Auteur inconnu";
-      let product = "Inconnu";
-      let content = "";
-      
-      try {
-        const titleEl = document.querySelector('.scTailwindThreadQuestionQuestioncardtitle, h1');
-        if (titleEl) title = titleEl.innerText.trim();
-        else title = document.title;
-        
-        const authorEl = document.querySelector('.scTailwindThreadPost_headerUserinfoname, .user-name, [data-stats-id="user-name"]');
-        if (authorEl) {
-          author = authorEl.innerText.trim();
-        } else {
-          const authorNode = document.evaluate('//*[contains(text(), "Auteur d\'origine")]/preceding-sibling::* | //*[contains(text(), "Auteur d\'origine")]/..', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-          if (authorNode && authorNode.innerText) author = authorNode.innerText.replace("Auteur d'origine", "").trim();
-        }
-
-        const productEl = document.querySelector('.scTailwindThreadQuestionForumtitleroot, a[href^="/s/community/forum/"]');
-        if (productEl) product = productEl.innerText.trim();
-        
-        const contentEl = document.querySelector('.scTailwindThreadPostcontentroot, .message-content, .thread-message-content');
-        if (contentEl) {
-          content = contentEl.innerText.trim();
-        } else {
-          // Repli très imprécis : il ramasse aussi la navigation, le pied de page et les
-          // autres réponses du fil. On le plafonne bas pour ne pas noyer la vraie question.
-          const contentEls = document.querySelectorAll('p');
-          if (contentEls && contentEls.length > 0) {
-            content = Array.from(contentEls)
-              .map(el => el.innerText.trim())
-              .filter(t => t)
-              .join('\n\n')
-              .substring(0, MAX_FALLBACK_CONTENT);
-          }
-        }
-
-        const detailsEl = document.querySelector('.scTailwindThreadQuestionQuestiondetailsdetails');
-        if (detailsEl) {
-          content += "\n\nDétails techniques : " + detailsEl.innerText.trim();
-        } else {
-          const detailsNode = document.evaluate('//*[text()="Détails"]/following-sibling::*', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-          if (detailsNode) content += "\n\nDétails techniques : " + detailsNode.innerText.trim();
-        }
-        
-      } catch (e) {
-        console.error("Erreur lors de l'extraction des données DOM :", e);
-      }
-      
-      content = content.substring(0, MAX_CONTENT);
+      // Une seule implémentation de l'extraction, partagée avec le parcours de relance.
+      // Elle existait ici en double : toute correction de sélecteur devait être portée
+      // aux deux endroits, et l'oubli n'était visible dans aucun test.
+      const { title, author, product, content } = extraireInfosThread();
 
       const payload = {
         title: title,
