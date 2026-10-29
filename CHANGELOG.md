@@ -2,7 +2,7 @@
 
 Toutes les modifications notables apportées à ce projet sont documentées dans ce fichier.
 
-## [Non publié]
+## [1.15.1] - 2026-10-29
 
 ### 💾 Le popup enregistre ce qui est rempli
 
