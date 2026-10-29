@@ -39,7 +39,7 @@ const check = (n, a, p) => { const ok = p(a); if (!ok) fails++; console.log((ok 
 console.log('\nLes tournures inventées par l\'outil ont disparu');
 let sb = makeSandbox(null);
 const messages = [];
-for (let i = 0; i < 40; i++) messages.push(sb.buildFormattedResponse('fr', 'Marie', 'Gmail', 'Corps technique.', 'REPONSE'));
+for (let i = 0; i < 40; i++) messages.push(sb.buildFormattedResponse_('fr', 'Marie', 'Gmail', 'Corps technique.', 'REPONSE'));
 const tout = messages.join('\n');
 ["Dites-moi si ça avance de votre côté",
  "Si ça ne débloque rien, redonnez-moi le détail",
@@ -54,31 +54,31 @@ check('signature toujours en fin de message', messages[0], t => t.trim().endsWit
 console.log('\nFormules personnalisées depuis le panneau de contrôle');
 sb = makeSandbox({ fr: "Bonne journée.\nBon courage." });
 const perso = [];
-for (let i = 0; i < 30; i++) perso.push(sb.buildFormattedResponse('fr', 'Marie', 'Gmail', 'Corps.', 'REPONSE'));
+for (let i = 0; i < 30; i++) perso.push(sb.buildFormattedResponse_('fr', 'Marie', 'Gmail', 'Corps.', 'REPONSE'));
 check('les formules saisies sont utilisées', perso.join('\n'), t => t.includes('Bonne journée.') && t.includes('Bon courage.'));
 check('les formules par défaut sont écartées', perso.join('\n'), t => !t.includes("n'hésitez pas à revenir vers nous"));
 check('les deux variantes alternent', new Set(perso).size, n => n > 1);
 
 console.log('\nClôture vide : le message s\'arrête sur le fond');
 sb = makeSandbox({ fr: "-" });
-const sansCloture = sb.buildFormattedResponse('fr', 'Marie', 'Gmail', 'Corps technique.', 'REPONSE');
+const sansCloture = sb.buildFormattedResponse_('fr', 'Marie', 'Gmail', 'Corps technique.', 'REPONSE');
 check('aucune phrase entre le fond et la signature', sansCloture, t => t === "Bonjour Marie,\n\nCorps technique.\n\nFabrice" || t.endsWith("Corps technique.\n\nFabrice"));
 check('pas de ligne vide surnuméraire', sansCloture, t => !/\n\n\n/.test(t));
 
 console.log('\nMélange de formules et de clôture vide');
 sb = makeSandbox({ fr: "Bonne journée.\n-" });
 const melange = [];
-for (let i = 0; i < 30; i++) melange.push(sb.buildFormattedResponse('fr', 'Marie', 'Gmail', 'Corps.', 'REPONSE'));
+for (let i = 0; i < 30; i++) melange.push(sb.buildFormattedResponse_('fr', 'Marie', 'Gmail', 'Corps.', 'REPONSE'));
 check('la variante avec formule apparaît', melange.join('|'), t => t.includes('Bonne journée.'));
 check('la variante sans formule apparaît', melange.some(m => m === "Bonjour Marie,\n\nCorps.\n\nFabrice"), v => v === true);
 
 console.log('\nLangues non personnalisées et clarifications');
 sb = makeSandbox({ fr: "Bonne journée." });
 check('l\'anglais garde ses valeurs par défaut',
-  sb.buildFormattedResponse('en', 'John', 'Gmail', 'Body.', 'REPONSE'),
+  sb.buildFormattedResponse_('en', 'John', 'Gmail', 'Body.', 'REPONSE'),
   t => t.includes('feel free to reply') || t.includes('I hope this answer'));
 check('une clarification garde sa formule dédiée',
-  sb.buildFormattedResponse('fr', 'Marie', 'Gmail', 'Quelle adresse ?', 'CLARIFICATION'),
+  sb.buildFormattedResponse_('fr', 'Marie', 'Gmail', 'Quelle adresse ?', 'CLARIFICATION'),
   t => !t.includes('Bonne journée.'));
 
 console.log('\n' + (fails === 0 ? 'Tous les tests passent.' : fails + ' test(s) en echec.'));

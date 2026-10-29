@@ -26,7 +26,7 @@ function onOpen() {
 function showAvailableModels() {
   const ui = SpreadsheetApp.getUi();
   try {
-    const models = listGeminiModels();
+    const models = listGeminiModels_();
     if (models.length === 0) {
       ui.alert('Information', 'Aucun modèle compatible avec la génération de contenu n\'a été trouvé.', ui.ButtonSet.OK);
       return;

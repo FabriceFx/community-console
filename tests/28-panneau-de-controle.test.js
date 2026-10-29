@@ -27,6 +27,8 @@ function serveur() {
     PropertiesService: { getScriptProperties: () => props, getUserProperties: () => props },
     CacheService: { getScriptCache: () => ({ get: () => null, put(){}, remove(){} }) },
     Utilities: { sleep(){}, getUuid: () => '0123-4567-89ab' },
+    // Le panneau s'ouvre depuis le classeur : utilisateur actif et effectif coïncident.
+    Session: { getActiveUser: () => ({ getEmail: () => 'pe@example.com' }), getEffectiveUser: () => ({ getEmail: () => 'pe@example.com' }) },
     SpreadsheetApp: { newRichTextValue: () => ({ setText(){ return this; }, build(){ return {}; } }), getActiveSpreadsheet: () => ({ getSheetByName: () => null }) }
   };
   vm.createContext(sb);
@@ -108,12 +110,12 @@ vue.registre.closings_it.value = 'Fammi sapere come va.';
 vue.enregistrer();
 
 // Ce que le serveur a réellement retenu
-check('signature persistée',   srv.getSignature(), v => v === 'Camille');
-check('secret persisté',       srv.getSharedSecret(), v => v === 'secret-de-test');
-check('clôtures FR persistées', srv.getCustomClosings('fr'), l => l.indexOf('Dites-moi si ça avance.') !== -1);
-check('clôtures DE persistées', srv.getCustomClosings('de'), l => l.indexOf('Melden Sie sich gerne wieder.') !== -1);
-check('clôtures ES persistées', srv.getCustomClosings('es'), l => l.indexOf('Cuénteme cómo va.') !== -1);
-check('clôtures IT persistées', srv.getCustomClosings('it'), l => l.indexOf('Fammi sapere come va.') !== -1);
+check('signature persistée',   srv.getSignature_(), v => v === 'Camille');
+check('secret persisté',       srv.getSharedSecret_(), v => v === 'secret-de-test');
+check('clôtures FR persistées', srv.getCustomClosings_('fr'), l => l.indexOf('Dites-moi si ça avance.') !== -1);
+check('clôtures DE persistées', srv.getCustomClosings_('de'), l => l.indexOf('Melden Sie sich gerne wieder.') !== -1);
+check('clôtures ES persistées', srv.getCustomClosings_('es'), l => l.indexOf('Cuénteme cómo va.') !== -1);
+check('clôtures IT persistées', srv.getCustomClosings_('it'), l => l.indexOf('Fammi sapere come va.') !== -1);
 
 // Le panneau rouvert doit afficher ce qui a été enregistré
 const rouvert = panneau(srv);
@@ -124,18 +126,18 @@ check('plus d\'avertissement de secret',    rouvert.registre.secretStatus.textCo
 
 console.log('\nLes réglages atteignent réellement les messages générés');
 check('la signature saisie est apposée',
-  srv.buildFormattedResponse('de', 'Anna', 'Gmail', 'Der Ordner wird nicht synchronisiert.', 'REPONSE'),
+  srv.buildFormattedResponse_('de', 'Anna', 'Gmail', 'Der Ordner wird nicht synchronisiert.', 'REPONSE'),
   t => t.trim().endsWith('Camille'));
 check('la clôture DE saisie est employée',
-  srv.buildFormattedResponse('de', 'Anna', 'Gmail', 'Der Ordner wird nicht synchronisiert.', 'REPONSE'),
+  srv.buildFormattedResponse_('de', 'Anna', 'Gmail', 'Der Ordner wird nicht synchronisiert.', 'REPONSE'),
   t => t.includes('Melden Sie sich gerne wieder.'));
 
 console.log('\nSignature effacée depuis le panneau');
 rouvert.registre.signature.value = '';
 rouvert.enregistrer();
-check('la signature est retirée côté serveur', srv.getSignature(), v => v === '');
+check('la signature est retirée côté serveur', srv.getSignature_(), v => v === '');
 check('le message s\'arrête alors sur la clôture',
-  srv.buildFormattedResponse('de', 'Anna', 'Gmail', 'Der Ordner wird nicht synchronisiert.', 'REPONSE'),
+  srv.buildFormattedResponse_('de', 'Anna', 'Gmail', 'Der Ordner wird nicht synchronisiert.', 'REPONSE'),
   t => t.trim().endsWith('Melden Sie sich gerne wieder.'));
 
 console.log('\n' + (fails === 0 ? 'Tous les tests passent.' : fails + ' test(s) en échec.'));

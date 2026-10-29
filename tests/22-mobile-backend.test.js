@@ -137,7 +137,7 @@ function createMobileEnv(customHtml = '') {
   // Le texte réellement soumis au modèle est mémorisé : sans feuille où le relire,
   // c'est le seul moyen de vérifier quelle source de contenu a été retenue.
   let dernierContenuGemini = '';
-  sandbox.generateReply = function(content, author, product) {
+  sandbox.generateReply_ = function(content, author, product) {
     dernierContenuGemini = content;
     return {
       ok: true,

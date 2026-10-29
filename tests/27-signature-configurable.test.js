@@ -36,7 +36,7 @@ const CLOTURE = { PE_CLOSINGS_fr: "Dites-moi si ça avance." };
 
 console.log('\nLa signature configurée est celle qui est apposée');
 let sb = makeSandbox(Object.assign({ PE_SIGNATURE: 'Camille' }, CLOTURE));
-let msg = sb.buildFormattedResponse('fr', 'Marie', 'Google Drive', 'Le partage externe est bloqué par une règle du domaine.', 'REPONSE');
+let msg = sb.buildFormattedResponse_('fr', 'Marie', 'Google Drive', 'Le partage externe est bloqué par une règle du domaine.', 'REPONSE');
 check('le message se termine par la signature', msg, t => t.trim().endsWith('Camille'));
 check('aucune signature en dur ne subsiste',    msg, t => !/Fabrice/.test(t));
 check('la signature n\'apparaît qu\'une fois',   (msg.match(/Camille/g) || []).length, n => n === 1);
@@ -44,23 +44,23 @@ check('la clôture précède la signature',        msg, t => /Dites-moi si ça a
 
 console.log('\nUne autre signature donne un autre message');
 sb = makeSandbox(Object.assign({ PE_SIGNATURE: 'Jean-Luc' }, CLOTURE));
-check('signature composée respectée', sb.buildFormattedResponse('fr', 'Marie', 'Gmail', 'Corps technique.', 'REPONSE'), t => t.trim().endsWith('Jean-Luc'));
+check('signature composée respectée', sb.buildFormattedResponse_('fr', 'Marie', 'Gmail', 'Corps technique.', 'REPONSE'), t => t.trim().endsWith('Jean-Luc'));
 
 console.log('\nSignature absente : le message s\'arrête sur la clôture');
 sb = makeSandbox(CLOTURE);
-msg = sb.buildFormattedResponse('fr', 'Marie', 'Gmail', 'Corps technique.', 'REPONSE');
+msg = sb.buildFormattedResponse_('fr', 'Marie', 'Gmail', 'Corps technique.', 'REPONSE');
 check('aucune ligne de signature',        msg, t => t.trim().endsWith("Dites-moi si ça avance."));
 check('pas de ligne vide en fin',         msg, t => t === t.trimEnd());
 check('le corps reste intact',            msg, t => t.includes('Corps technique.'));
 
 console.log('\nRelances');
 sb = makeSandbox(Object.assign({ PE_SIGNATURE: 'Camille' }, CLOTURE));
-check('relance ordinaire signée',   sb.buildFollowUpResponse('fr', 'Le blocage vient de la règle du domaine.', 'ECHEC'), t => t.trim().endsWith('Camille'));
-check('remerciement : corps et signature seuls', sb.buildFollowUpResponse('fr', 'Parfait, merci de la confirmation.', 'RESOLU'),
+check('relance ordinaire signée',   sb.buildFollowUpResponse_('fr', 'Le blocage vient de la règle du domaine.', 'ECHEC'), t => t.trim().endsWith('Camille'));
+check('remerciement : corps et signature seuls', sb.buildFollowUpResponse_('fr', 'Parfait, merci de la confirmation.', 'RESOLU'),
   t => t === "Parfait, merci de la confirmation.\n\nCamille");
 
 sb = makeSandbox(CLOTURE);
-check('relance non signée si aucune signature', sb.buildFollowUpResponse('fr', 'Parfait, merci de la confirmation.', 'RESOLU'),
+check('relance non signée si aucune signature', sb.buildFollowUpResponse_('fr', 'Parfait, merci de la confirmation.', 'RESOLU'),
   t => t === "Parfait, merci de la confirmation.");
 
 console.log('\n' + (fails === 0 ? 'Tous les tests passent.' : fails + ' test(s) en échec.'));

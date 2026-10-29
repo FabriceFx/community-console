@@ -50,6 +50,8 @@ Cet outil est destiné aux **Product Experts (PE) Google**. Il rédige une propo
 - **Champs sensibles masqués par défaut côté UI** : Clé API Gemini et secret partagé sont masqués (`type="password"`) avec bouton d'affichage/masquage discret (👁️/🙈) dans le panneau Google Sheets et le popup de l'extension.
 - **Clé API en en-tête HTTP** (`x-goog-api-key`) et filtrage systématique des secrets (`redactSecrets_`) dans les journaux et les messages d'erreur.
 - **Allowlist de domaine** sur l'extraction serveur : seules les URL `support.google.com` sont récupérables (protection anti-SSRF).
+- **Surface `google.script.run` fermée** : la page mobile étant servie à des visiteurs anonymes, toute fonction publique du projet leur était appelable depuis la console du navigateur. Seules dix fonctions restent publiques (points d'entrée, cibles de menu, panneau) ; les trois fonctions du panneau de réglages refusent tout appel qui ne vient pas du propriétaire, depuis le classeur. `tests/31-surface-google-script-run.test.js` échoue si une fonction publique apparaît hors de cette liste.
+- **Portée `userinfo.email`** : demandée pour ce seul contrôle d'identité (`Session.getActiveUser()`). Elle donne accès à votre adresse, à rien d'autre.
 
 #### 🤖 Backend Google Apps Script & IA Gemini
 - **Alignement Recommandations Google CM (Compte Google)** : Prise en compte des directives officielles pour accuser réception des faits précis, être direct sur la faisabilité et expliquer clairement les règles de sécurité.
@@ -99,6 +101,8 @@ Après toute modification des fichiers `gas/` :
 2. **Déployer > Gérer les déploiements > ✏️ (modifier) > Version : Nouvelle version > Déployer.**
 
 Sans cette seconde étape, la WebApp continue de servir l'ancien code : l'extension détecte l'écart de version et vous en avertit.
+
+Une mise à jour qui ajoute une portée OAuth (c'est le cas de la v1.14.0, avec `userinfo.email`) demande une nouvelle autorisation : ouvrez le panneau de contrôle depuis le classeur et acceptez l'écran d'autorisation **avant** de redéployer.
 
 #### 3. Installation de l'Extension Chrome
 1. Ouvrez Chrome et rendez-vous sur `chrome://extensions/`.

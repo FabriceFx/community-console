@@ -21,7 +21,7 @@ function redactSecrets_(value) {
  * @param {number} maxRetries Nombre maximal de tentatives (défaut: 3)
  * @returns {GoogleAppsScript.URL_Fetch.HTTPResponse}
  */
-function fetchWithRetry(url, options, maxRetries = 3) {
+function fetchWithRetry_(url, options, maxRetries = 3) {
   let delay = 1000;
   let lastError = null;
   let lastResponse = null;
@@ -97,7 +97,7 @@ function checkUrlStatus_(url) {
  * @param {string} url L'URL à tester
  * @returns {boolean} true si l'URL répond avec un statut HTTP valide (< 400)
  */
-function isUrlValid(url) {
+function isUrlValid_(url) {
   return checkUrlStatus_(url) === 'valide';
 }
 
@@ -106,7 +106,7 @@ function isUrlValid(url) {
  * @param {string} url L'URL pouvant être un lien de redirection Vertex AI
  * @returns {string} L'URL finale résolue ou l'URL d'origine en cas d'échec
  */
-function resolveRedirectUrl(url) {
+function resolveRedirectUrl_(url) {
   if (!url || typeof url !== 'string') return url;
   if (!url.includes('vertexaisearch.cloud.google.com')) {
     return url;
@@ -152,7 +152,7 @@ function extraireUrlsGrounding_(candidate) {
   if (candidate && candidate.groundingMetadata && candidate.groundingMetadata.groundingChunks) {
     candidate.groundingMetadata.groundingChunks.forEach((chunk) => {
       if (chunk.web && chunk.web.uri) {
-        urls.push(resolveRedirectUrl(chunk.web.uri));
+        urls.push(resolveRedirectUrl_(chunk.web.uri));
       }
     });
   }
@@ -196,7 +196,7 @@ function contientCheminInterface_(body) {
  * @param {Object} candidate Le candidat retourné par l'API Gemini
  * @returns {string} Le texte avec les URL vérifiées ou supprimées
  */
-function cleanAndValidateUrls(text, candidate) {
+function cleanAndValidateUrls_(text, candidate) {
   if (!text) return "";
 
   // Marqueur interne (caractère NUL, absent de tout texte généré) repérant l'emplacement
@@ -222,7 +222,7 @@ function cleanAndValidateUrls(text, candidate) {
   // 2. Traiter les liens Markdown [Titre](URL) -> Titre : URL (sans crochets ni parenthèses)
   const markdownLinkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)/g;
   let cleanedText = text.replace(markdownLinkRegex, (match, label, url) => {
-    const targetUrl = resolveRedirectUrl(url);
+    const targetUrl = resolveRedirectUrl_(url);
 
     if (isVerified(targetUrl, url) || isKeepable(targetUrl)) {
       return `${label} : ${targetUrl}`;
@@ -247,7 +247,7 @@ function cleanAndValidateUrls(text, candidate) {
       return canonicalTrustedUrl_(bareUrl) + trailing;
     }
 
-    const targetUrl = resolveRedirectUrl(bareUrl);
+    const targetUrl = resolveRedirectUrl_(bareUrl);
 
     if (isVerified(targetUrl, bareUrl) || isKeepable(targetUrl)) {
       return targetUrl + trailing;
@@ -279,7 +279,7 @@ function cleanAndValidateUrls(text, candidate) {
  * @param {string} text Le texte à analyser
  * @returns {string} Le texte où les e-mails, téléphones et secrets sont masqués
  */
-function sanitizePii(text) {
+function sanitizePii_(text) {
   if (!text || typeof text !== 'string') return "";
 
   let cleaned = text;
@@ -351,7 +351,7 @@ function tauxDeModification_(propose, publie) {
  * @returns {string} Le message complet, signé si une signature est configurée
  */
 function apposerSignature_(blocs) {
-  const signature = (typeof getSignature === 'function') ? getSignature() : '';
+  const signature = (typeof getSignature_ === 'function') ? getSignature_() : '';
   return (signature ? blocs.concat(['', signature]) : blocs).join('\n');
 }
 
@@ -615,7 +615,7 @@ function parseFollowUpEnvelope_(raw) {
  * @param {string} suite Classification de la relance
  * @returns {string} Le message complet
  */
-function buildFollowUpResponse(lang, body, suite) {
+function buildFollowUpResponse_(lang, body, suite) {
   const langKey = REPLY_SHELLS[lang] ? lang : 'fr';
   const texte = String(body || '').trim();
 
@@ -624,7 +624,7 @@ function buildFollowUpResponse(lang, body, suite) {
     return apposerSignature_([texte]);
   }
 
-  const custom = (typeof getCustomClosings === 'function') ? getCustomClosings(langKey) : null;
+  const custom = (typeof getCustomClosings_ === 'function') ? getCustomClosings_(langKey) : null;
   const pool = (custom && custom.length) ? custom : REPLY_SHELLS[langKey].closings;
   const closing = pickVariant_(pool, 'PE_LAST_CLOSING_' + langKey);
 
@@ -905,7 +905,7 @@ const REPLY_SHELLS = {
  * @param {string} text Le texte à analyser
  * @returns {string} Code de langue ('fr', 'en', 'de', 'es', 'it')
  */
-function detectLanguage(text) {
+function detectLanguage_(text) {
   if (!text || typeof text !== 'string') return 'fr';
 
   const wordLists = {
@@ -946,7 +946,7 @@ function detectLanguage(text) {
  * @param {string} [status] STATUT renvoyé par le modèle (REPONSE, CLARIFICATION, HORS_SUJET)
  * @returns {string} Le message complet prêt à être relu puis publié
  */
-function buildFormattedResponse(lang, displayName, product, technicalResponse, status) {
+function buildFormattedResponse_(lang, displayName, product, technicalResponse, status) {
   const shell = REPLY_SHELLS[lang] || REPLY_SHELLS.fr;
   const langKey = REPLY_SHELLS[lang] ? lang : 'fr';
   const name = String(displayName || '').trim();
@@ -965,7 +965,7 @@ function buildFormattedResponse(lang, displayName, product, technicalResponse, s
 
   // Les formules saisies dans le panneau de contrôle priment sur celles fournies par défaut :
   // ces phrases signent le message, elles doivent être celles du Product Expert.
-  const custom = (typeof getCustomClosings === 'function') ? getCustomClosings(langKey) : null;
+  const custom = (typeof getCustomClosings_ === 'function') ? getCustomClosings_(langKey) : null;
   const closingPool = isClarification
     ? shell.clarifications
     : (custom && custom.length ? custom : shell.closings);
@@ -981,16 +981,45 @@ function buildFormattedResponse(lang, displayName, product, technicalResponse, s
 }
 
 /**
+ * Proposition de réponse à une question. Les champs facultatifs ne sont présents
+ * que sur une génération réussie : un échec ne rend que ok, status, confidence,
+ * lang et le message d'erreur dans text.
+ *
+ * @typedef {Object} Proposition
+ * @property {boolean} ok Génération aboutie
+ * @property {string} status REPONSE, CLARIFICATION, HORS_SUJET — ou ERREUR
+ * @property {string} confidence HAUTE, MOYENNE ou FAIBLE
+ * @property {string} lang Code de langue détecté
+ * @property {string} text Le message prêt à relire, ou le message d'erreur
+ * @property {boolean} [uiPathUnsourced] Procédure d'interface rédigée sans source consultée
+ * @property {boolean} [truncated] Réponse toujours tronquée après relance
+ */
+
+/**
+ * Proposition de réponse à une relance, ou de complément sur le fil d'un autre bénévole.
+ *
+ * @typedef {Object} PropositionRelance
+ * @property {boolean} ok Génération aboutie
+ * @property {string} suite RESOLU, ECHEC, INCOMPRIS, NOUVEAU, HORS_SUJET ou RIEN_A_AJOUTER
+ * @property {string} confidence HAUTE, MOYENNE ou FAIBLE
+ * @property {string} lang Code de langue détecté
+ * @property {string} text Le message prêt à relire, ou le message d'erreur
+ * @property {boolean} repeatsPrevious La proposition reformule la réponse déjà publiée
+ * @property {number} [overlap] Recouvrement avec la réponse précédente, en pourcentage
+ * @property {boolean} truncated Réponse toujours tronquée après relance
+ */
+
+/**
  * Fait appel à l'API Gemini pour rédiger une proposition de réponse à un thread.
  *
  * @param {string} content Le texte brut de la question.
  * @param {string} author L'auteur de la question.
  * @param {string} product Le nom du produit Google.
  * @param {string} [passedApiKey] Clé API Gemini optionnelle transmise dynamiquement (jamais persistée).
- * @returns {{status: string, confidence: string, lang: string, text: string, ok: boolean}}
+ * @returns {Proposition}
  */
-function generateReply(content, author = "Utilisateur", product = "Google", passedApiKey = "") {
-  const apiKey = (passedApiKey && passedApiKey.trim()) ? passedApiKey.trim() : getGeminiApiKey();
+function generateReply_(content, author = "Utilisateur", product = "Google", passedApiKey = "") {
+  const apiKey = (passedApiKey && passedApiKey.trim()) ? passedApiKey.trim() : getGeminiApiKey_();
   if (!apiKey) {
     return {
       ok: false,
@@ -1001,11 +1030,11 @@ function generateReply(content, author = "Utilisateur", product = "Google", pass
     };
   }
 
-  const modelName = getGeminiModelName();
+  const modelName = getGeminiModelName_();
   const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
 
   const authorName = (author && author.trim()) ? author.trim() : "Utilisateur";
-  const sanitizedContent = sanitizePii(content);
+  const sanitizedContent = sanitizePii_(content);
 
   const userTurn = `Produit concerné : ${product}
 Prénom affiché de la personne : ${authorName}
@@ -1056,7 +1085,7 @@ ${sanitizedContent}
     // Une réponse coupée en pleine phrase est inexploitable : on relance une fois
     // avec un budget doublé avant de renoncer.
     for (let tentative = 0; tentative < 2; tentative++) {
-      const response = fetchWithRetry(apiUrl, construireOptions(maxTokens));
+      const response = fetchWithRetry_(apiUrl, construireOptions(maxTokens));
       const json = JSON.parse(response.getContentText());
 
       if (json.error) {
@@ -1106,12 +1135,12 @@ ${sanitizedContent}
       }
 
       const envelope = parseModelEnvelope_(rawText);
-      const validated = cleanAndValidateUrls(envelope.body, candidate);
+      const validated = cleanAndValidateUrls_(envelope.body, candidate);
       const humanized = humanizeBody_(validated);
 
       const lang = REPLY_SHELLS[envelope.lang]
         ? envelope.lang
-        : detectLanguage((content || "") + "\n" + humanized);
+        : detectLanguage_((content || "") + "\n" + humanized);
 
       // Les consignes du prompt étant en français, l'intitulé de la ligne de récupération
       // peut être recopié tel quel dans une réponse d'une autre langue : on le réaligne.
@@ -1135,7 +1164,7 @@ ${sanitizedContent}
         lang: lang,
         uiPathUnsourced: cheminNonSource,
         truncated: tronque,
-        text: buildFormattedResponse(lang, authorName, product, localise, envelope.status)
+        text: buildFormattedResponse_(lang, authorName, product, localise, envelope.status)
       };
     }
 
@@ -1160,23 +1189,11 @@ ${sanitizedContent}
 }
 
 /**
- * Ancienne signature conservée pour compatibilité : renvoie uniquement le texte du message.
- * @param {string} content Le texte brut de la question.
- * @param {string} author L'auteur de la question.
- * @param {string} product Le nom du produit Google.
- * @param {string} [passedApiKey] Clé API Gemini optionnelle.
- * @returns {string} Le message généré
- */
-function generateSummaryWithGemini(content, author, product, passedApiKey) {
-  return generateReply(content, author, product, passedApiKey).text;
-}
-
-/**
  * Récupère la liste des modèles Gemini disponibles pour la clé API actuelle
  * @returns {Array<string>} Liste des noms de modèles supportant generateContent
  */
-function listGeminiModels() {
-  const apiKey = getGeminiApiKey();
+function listGeminiModels_() {
+  const apiKey = getGeminiApiKey_();
   if (!apiKey) {
     throw new Error("Veuillez d'abord configurer votre clé API dans le panneau de contrôle.");
   }
@@ -1190,7 +1207,7 @@ function listGeminiModels() {
   };
 
   try {
-    const response = fetchWithRetry(apiUrl, options);
+    const response = fetchWithRetry_(apiUrl, options);
     const json = JSON.parse(response.getContentText());
 
     if (json.error) {
@@ -1221,15 +1238,15 @@ function listGeminiModels() {
  * @param {string} contexte.product Produit Google concerné
  * @param {boolean} [contexte.peADejaRepondu] false si le Product Expert n'a pas encore écrit sur ce fil
  * @param {string} [contexte.apiKey] Clé API Gemini transmise dynamiquement (jamais persistée)
- * @returns {{ok: boolean, suite: string, confidence: string, lang: string, text: string, repeatsPrevious: boolean, truncated: boolean}}
+ * @returns {PropositionRelance}
  */
-function generateFollowUp(contexte) {
-  // Même règle que generateReply : la clé transmise par l'appelant sert à la requête
+function generateFollowUp_(contexte) {
+  // Même règle que generateReply_ : la clé transmise par l'appelant sert à la requête
   // en cours et n'est jamais persistée. Sans cela, un Product Expert ayant configuré
   // sa clé uniquement dans l'extension voyait toutes ses relances échouer.
   const apiKey = (contexte.apiKey && String(contexte.apiKey).trim())
     ? String(contexte.apiKey).trim()
-    : getGeminiApiKey();
+    : getGeminiApiKey_();
   if (!apiKey) {
     return {
       ok: false, suite: 'ERREUR', confidence: 'FAIBLE', lang: 'fr', repeatsPrevious: false, truncated: false,
@@ -1237,7 +1254,7 @@ function generateFollowUp(contexte) {
     };
   }
 
-  const followUp = sanitizePii(String(contexte.followUp || '').trim());
+  const followUp = sanitizePii_(String(contexte.followUp || '').trim());
   if (!followUp) {
     return {
       ok: false, suite: 'ERREUR', confidence: 'FAIBLE', lang: 'fr', repeatsPrevious: false, truncated: false,
@@ -1246,14 +1263,14 @@ function generateFollowUp(contexte) {
   }
 
   const previousAnswer = String(contexte.previousAnswer || '').trim();
-  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${getGeminiModelName()}:generateContent`;
+  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${getGeminiModelName_()}:generateContent`;
 
   const userTurn = `Produit concerné : ${contexte.product || 'Google'}
 Prénom affiché de la personne : ${contexte.author || 'Utilisateur'}
 
 QUESTION D'ORIGINE :
 """
-${sanitizePii(String(contexte.question || '').trim()) || '(non disponible)'}
+${sanitizePii_(String(contexte.question || '').trim()) || '(non disponible)'}
 """
 
 ${contexte.peADejaRepondu === false
@@ -1288,7 +1305,7 @@ ${followUp}
     let maxTokens = CONFIG.MAX_OUTPUT_TOKENS;
 
     for (let tentative = 0; tentative < 2; tentative++) {
-      const response = fetchWithRetry(apiUrl, construireOptions(maxTokens));
+      const response = fetchWithRetry_(apiUrl, construireOptions(maxTokens));
       const json = JSON.parse(response.getContentText());
 
       if (json.error) {
@@ -1324,10 +1341,10 @@ ${followUp}
     }
 
     const envelope = parseFollowUpEnvelope_(rawText);
-    const validated = cleanAndValidateUrls(envelope.body, candidate);
+    const validated = cleanAndValidateUrls_(envelope.body, candidate);
     const humanized = humanizeBody_(validated);
 
-    const lang = REPLY_SHELLS[envelope.lang] ? envelope.lang : detectLanguage(followUp + "\n" + humanized);
+    const lang = REPLY_SHELLS[envelope.lang] ? envelope.lang : detectLanguage_(followUp + "\n" + humanized);
     const localise = localiserLigneRecuperation_(humanized, lang);
 
     // Garde-fou anti-redite : si la proposition recouvre largement la réponse déjà publiée,
@@ -1347,7 +1364,7 @@ ${followUp}
       repeatsPrevious: redite,
       overlap: Math.round(recouvrement * 100),
       truncated: tronque,
-      text: envelope.suite === 'RIEN_A_AJOUTER' ? localise : buildFollowUpResponse(lang, localise, envelope.suite)
+      text: envelope.suite === 'RIEN_A_AJOUTER' ? localise : buildFollowUpResponse_(lang, localise, envelope.suite)
     };
 
   } catch (e) {

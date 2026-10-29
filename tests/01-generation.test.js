@@ -35,7 +35,7 @@ const input = [
   'Voir aussi : ' + DEAD,
   'Utiliser IMPORTXML : ' + VALID
 ].join('\n');
-const cleaned = sandbox.cleanAndValidateUrls(input, candidate);
+const cleaned = sandbox.cleanAndValidateUrls_(input, candidate);
 check('« procedez comme suit : » conserve son deux-points', cleaned, t => t.includes('procedez comme suit :'));
 check('la ligne de source morte est supprimee',              cleaned, t => !t.includes('999999999') && !t.includes('Voir aussi'));
 check('la source valide est conservee',                      cleaned, t => t.includes('Utiliser IMPORTXML : ' + VALID));
@@ -59,14 +59,14 @@ check('repli si en-tete absent', noEnv.body, v => v === 'Reponse sans en-tete du
 
 console.log('\n4. Coquilles : variation, prenom unique, produit inconnu');
 const seen = new Set();
-for (let i = 0; i < 30; i++) seen.add(sandbox.buildFormattedResponse('fr','Marie','Google Sheets','Corps technique.','REPONSE'));
+for (let i = 0; i < 30; i++) seen.add(sandbox.buildFormattedResponse_('fr','Marie','Google Sheets','Corps technique.','REPONSE'));
 check('les messages varient d\'un appel a l\'autre', seen.size, v => v > 1, 'variantes distinctes : ' + seen.size);
 const one = [...seen][0];
 check('le prenom n\'apparait qu\'une seule fois', (one.match(/Marie/g)||[]).length, v => v === 1);
 check('la signature est presente', one, t => t.trim().endsWith('Fabrice'));
-const unknown = sandbox.buildFormattedResponse('fr','Marie','Inconnu','Corps.','REPONSE');
+const unknown = sandbox.buildFormattedResponse_('fr','Marie','Inconnu','Corps.','REPONSE');
 check('aucun « bienvenue ... Inconnu »', unknown, t => !t.includes('Inconnu'));
-const clarif = sandbox.buildFormattedResponse('fr','Marie','Google Sheets','Quelle page ?','CLARIFICATION');
+const clarif = sandbox.buildFormattedResponse_('fr','Marie','Google Sheets','Quelle page ?','CLARIFICATION');
 check('pas de message de bienvenue sur une clarification', clarif, t => !t.toLowerCase().includes('bienvenue'));
 
 console.log('\n5. Garde-fous de securite');
@@ -74,7 +74,7 @@ check('la cle API est masquee dans les messages', sandbox.redactSecrets_('Reques
 check('domaine autorise accepte', (()=>{ try { sandbox.assertAllowedHost_('https://support.google.com/x/thread/1'); return 'ok'; } catch(e){ return e.message; } })(), v => v === 'ok');
 check('domaine tiers rejete',     (()=>{ try { sandbox.assertAllowedHost_('https://evil.example.com/'); return 'ok'; } catch(e){ return 'rejete'; } })(), v => v === 'rejete');
 check('requete sans secret rejetee', (()=>{ try { sandbox.assertAuthorized_(''); return 'ok'; } catch(e){ return 'rejete'; } })(), v => v === 'rejete');
-sandbox.setSharedSecret('s3cr3t');
+sandbox.setSharedSecret_('s3cr3t');
 check('bon secret accepte',     (()=>{ try { sandbox.assertAuthorized_('s3cr3t'); return 'ok'; } catch(e){ return 'rejete'; } })(), v => v === 'ok');
 check('mauvais secret rejete',  (()=>{ try { sandbox.assertAuthorized_('autre'); return 'ok'; } catch(e){ return 'rejete'; } })(), v => v === 'rejete');
 

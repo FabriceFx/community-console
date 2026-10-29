@@ -35,10 +35,10 @@ const check=(n,a,p)=>{const ok=p(a);if(!ok)fails++;console.log((ok?'  OK   ':'  
 console.log('\n1. Liens du Centre d\'aide — regression corrigee');
 let sb = makeSandbox([]);
 const src = "Activez le partage.\n\nPartager des fichiers : " + HELP;
-mode='ok';     check('lien conserve quand la verification passe', sb.cleanAndValidateUrls(src,{}), t=>t.includes(HELP));
-mode='reseau'; check('lien conserve malgre un echec reseau',      sb.cleanAndValidateUrls(src,{}), t=>t.includes(HELP));
-mode='500';    check('lien conserve malgre un 503',               sb.cleanAndValidateUrls(src,{}), t=>t.includes(HELP));
-mode='ok';     check('404 confirme : lien bien supprime', sb.cleanAndValidateUrls("Voir : https://support.google.com/inexistant",{}), t=>!t.includes('inexistant'));
+mode='ok';     check('lien conserve quand la verification passe', sb.cleanAndValidateUrls_(src,{}), t=>t.includes(HELP));
+mode='reseau'; check('lien conserve malgre un echec reseau',      sb.cleanAndValidateUrls_(src,{}), t=>t.includes(HELP));
+mode='500';    check('lien conserve malgre un 503',               sb.cleanAndValidateUrls_(src,{}), t=>t.includes(HELP));
+mode='ok';     check('404 confirme : lien bien supprime', sb.cleanAndValidateUrls_("Voir : https://support.google.com/inexistant",{}), t=>!t.includes('inexistant'));
 check('etat tri-etat correct', [sb.checkUrlStatus_(HELP), (mode='reseau', sb.checkUrlStatus_(HELP))], v=>v[0]==='valide'&&v[1]==='inconnue');
 mode='ok';
 

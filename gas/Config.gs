@@ -7,12 +7,15 @@
  * la WebApp mobile a besoin côté serveur.
  */
 
+// Version du backend, seule source du numéro côté Apps Script : le fichier VERSION
+// la contrôle (atelier verifier) et extension/manifest.json doit la suivre.
+// L'extension la compare à la sienne : le projet Apps Script et l'extension se
+// déploient séparément, et un backend resté en arrière produit des comportements
+// incompréhensibles côté navigateur.
+const COMMUNITY_CONSOLE_VERSION = "1.13.3";
+
 const CONFIG = {
-  // Version du backend, à tenir alignée sur extension/manifest.json.
-  // L'extension la compare à la sienne : le projet Apps Script et l'extension se
-  // déploient séparément, et un backend resté en arrière produit des comportements
-  // incompréhensibles côté navigateur.
-  VERSION: "1.13.3",
+  VERSION: COMMUNITY_CONSOLE_VERSION,
 
   // Budget de génération. Large à dessein : sur un modèle qui raisonne avant de répondre,
   // les jetons de réflexion se déduisent de cette enveloppe et tronquaient le texte visible.
@@ -45,7 +48,7 @@ const CONFIG = {
  * Récupère la clé API Gemini enregistrée par l'utilisateur
  * @returns {string} La clé API ou une chaîne vide
  */
-function getGeminiApiKey() {
+function getGeminiApiKey_() {
   return PropertiesService.getUserProperties().getProperty('GEMINI_API_KEY') || '';
 }
 
@@ -53,7 +56,7 @@ function getGeminiApiKey() {
  * Enregistre la clé API Gemini
  * @param {string} key La clé API à sauvegarder
  */
-function setGeminiApiKey(key) {
+function setGeminiApiKey_(key) {
   PropertiesService.getUserProperties().setProperty('GEMINI_API_KEY', key);
 }
 
@@ -61,7 +64,7 @@ function setGeminiApiKey(key) {
  * Récupère le nom du modèle Gemini enregistré
  * @returns {string} Le nom du modèle ou 'gemini-3.7-flash' par défaut
  */
-function getGeminiModelName() {
+function getGeminiModelName_() {
   return PropertiesService.getUserProperties().getProperty('GEMINI_MODEL') || 'gemini-3.7-flash';
 }
 
@@ -69,7 +72,7 @@ function getGeminiModelName() {
  * Enregistre le nom du modèle Gemini
  * @param {string} modelName Le modèle à sauvegarder
  */
-function setGeminiModelName(modelName) {
+function setGeminiModelName_(modelName) {
   PropertiesService.getUserProperties().setProperty('GEMINI_MODEL', modelName);
 }
 
@@ -79,7 +82,7 @@ function setGeminiModelName(modelName) {
  * s'exécute au nom du propriétaire pour des appelants anonymes.
  * @returns {string} Le secret, ou une chaîne vide s'il n'est pas configuré
  */
-function getSharedSecret() {
+function getSharedSecret_() {
   return PropertiesService.getScriptProperties().getProperty('PE_SHARED_SECRET') || '';
 }
 
@@ -87,7 +90,7 @@ function getSharedSecret() {
  * Enregistre le secret partagé protégeant la WebApp publique.
  * @param {string} secret Le secret à sauvegarder
  */
-function setSharedSecret(secret) {
+function setSharedSecret_(secret) {
   PropertiesService.getScriptProperties().setProperty('PE_SHARED_SECRET', String(secret || '').trim());
 }
 
@@ -100,7 +103,7 @@ function setSharedSecret(secret) {
  * @throws {Error} Si aucun secret n'est configuré, ou si le secret transmis est incorrect
  */
 function assertAuthorized_(providedSecret) {
-  const expected = getSharedSecret();
+  const expected = getSharedSecret_();
 
   if (!expected) {
     throw new Error(
@@ -144,12 +147,12 @@ function assertAllowedHost_(url) {
  * @param {string} lang Code de langue ('fr', 'en', 'de', 'es', 'it')
  * @returns {Array<string>|null} Les formules personnalisées, ou null si non configurées
  */
-function getCustomClosings(lang) {
+function getCustomClosings_(lang) {
   const raw = PropertiesService.getScriptProperties().getProperty('PE_CLOSINGS_' + lang);
   if (raw === null || raw === undefined) return null;
 
   // Chaque ligne est une variante ; « - » déclare explicitement une clôture vide.
-  // La propriété étant supprimée quand la saisie est vide (voir setCustomClosings),
+  // La propriété étant supprimée quand la saisie est vide (voir setCustomClosings_),
   // sa seule présence signifie que le choix est délibéré — y compris « aucune formule ».
   const list = String(raw).split('\n').map(function (line) {
     const trimmed = line.trim();
@@ -164,7 +167,7 @@ function getCustomClosings(lang) {
  * @param {string} lang Code de langue
  * @param {string} text Une formule par ligne ; « - » pour une clôture vide
  */
-function setCustomClosings(lang, text) {
+function setCustomClosings_(lang, text) {
   const props = PropertiesService.getScriptProperties();
   const clean = String(text || '').trim();
 
@@ -189,7 +192,7 @@ function setCustomClosings(lang, text) {
  *
  * @returns {string} La signature, ou une chaîne vide si aucune n'est configurée
  */
-function getSignature() {
+function getSignature_() {
   return String(PropertiesService.getScriptProperties().getProperty('PE_SIGNATURE') || '').trim();
 }
 
@@ -197,7 +200,7 @@ function getSignature() {
  * Enregistre la signature apposée au bas des messages générés.
  * @param {string} signature Le prénom ou le nom à apposer ; vide pour ne pas signer
  */
-function setSignature(signature) {
+function setSignature_(signature) {
   const props = PropertiesService.getScriptProperties();
   const clean = String(signature || '').trim();
 

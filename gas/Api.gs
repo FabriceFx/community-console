@@ -82,7 +82,7 @@ function handleNouvelleQuestion_(data) {
 
   // La clé transmise ne sert qu'à la requête en cours : elle n'est jamais persistée côté
   // serveur, sinon un appelant pourrait écraser la clé API du propriétaire du script.
-  const reply = generateReply(
+  const reply = generateReply_(
     content,
     data.author || "Auteur inconnu",
     data.product || "Inconnu",
@@ -123,7 +123,7 @@ function handleFollowUp_(data) {
   // été dit. L'appelant en est averti par hadPreviousAnswer.
   const previousAnswer = String(data.previousAnswerFromThread || '').trim();
 
-  const reply = generateFollowUp({
+  const reply = generateFollowUp_({
     question: String(data.question || data.title || '').trim(),
     previousAnswer: previousAnswer,
     followUp: followUpText,

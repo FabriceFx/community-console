@@ -41,14 +41,14 @@ check('valeur par défaut si en-tête absent', sb.parseFollowUpEnvelope_("Texte 
   check(c + ' reconnu', sb.parseFollowUpEnvelope_("SUITE: " + c + "\n---\nCorps.").suite, v => v === c));
 
 console.log('\nMise en forme : pas de bienvenue sur un troisième message');
-const msg = sb.buildFollowUpResponse('fr', "Le message d'erreur que vous décrivez oriente vers autre chose.", 'ECHEC');
+const msg = sb.buildFollowUpResponse_('fr', "Le message d'erreur que vous décrivez oriente vers autre chose.", 'ECHEC');
 check('aucune formule de bienvenue', msg, t => !/bienvenue/i.test(t));
 check('aucune salutation d\'ouverture', msg, t => !/^bonjour/i.test(t.trim()));
 check('signature présente', msg, t => t.trim().endsWith('Fabrice'));
 check('formule de clôture conservée', msg, t => t.includes("n'hésitez pas à revenir vers nous") || t.includes("J'espère que cette réponse"));
 
 console.log('\nCas RESOLU : le plus court est le meilleur');
-const resolu = sb.buildFollowUpResponse('fr', "Parfait, merci de la confirmation.", 'RESOLU');
+const resolu = sb.buildFollowUpResponse_('fr', "Parfait, merci de la confirmation.", 'RESOLU');
 check('aucune formule de clôture invitant à revenir', resolu, t => !t.includes("n'hésitez pas à revenir vers nous"));
 check('corps et signature uniquement', resolu, t => t === "Parfait, merci de la confirmation.\n\nFabrice");
 

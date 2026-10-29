@@ -125,7 +125,7 @@ function processMobileThreadUrl(threadUrl, providedAuthor, providedContent, prov
   }
 
   // 7. Générer la proposition de réponse, sans rien conserver
-  const reply = generateReply(content, author, product);
+  const reply = generateReply_(content, author, product);
   const summary = reply.text || "";
 
   return {

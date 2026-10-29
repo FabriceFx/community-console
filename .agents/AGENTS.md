@@ -5,7 +5,7 @@
 
 ## Versionning de l'extension Chrome & du Projet
 - À chaque modification, correction de bug ou nouvelle fonctionnalité apportée au projet ou à l'extension, le numéro de version (`MAJOR.MINOR.PATCH`) dans `extension/manifest.json` doit impérativement être incrémenté (notamment le dernier digit `PATCH` pour les corrections) et aligné avec les fichiers `CHANGELOG.md` et `README.md`.
-- **`CONFIG.VERSION` dans `gas/Config.gs` doit être aligné sur la même valeur.** L'extension la compare à la sienne et signale un écart : le projet Apps Script et l'extension se déploient séparément, et un backend resté en arrière produit des symptômes sans rapport apparent avec la cause.
+- **`COMMUNITY_CONSOLE_VERSION` dans `gas/Config.gs` et le fichier `VERSION` doivent être alignés sur la même valeur** (`atelier verifier` le contrôle). L'extension la compare à la sienne et signale un écart : le projet Apps Script et l'extension se déploient séparément, et un backend resté en arrière produit des symptômes sans rapport apparent avec la cause.
 - Redéployer le backend ne consiste pas seulement à copier les fichiers : la WebApp sert la **version de déploiement**, pas le code enregistré. Il faut créer une nouvelle version via *Déployer > Gérer les déploiements > ✏️ > Version : Nouvelle version*.
 
 ## Qualité des réponses publiées
@@ -18,7 +18,7 @@ Conséquences à respecter lors de toute évolution :
 - Le contrat de sortie du modèle (`LANG` / `STATUT` / `CONFIANCE` puis `---`) est analysé par `parseModelEnvelope_` ; toute modification du prompt doit préserver ce format.
 - Les formules d'accueil et de clôture doivent rester **variables** (`REPLY_SHELLS`) : une coquille figée rend la série de réponses reconnaissable.
 - Le prénom de l'auteur ne doit apparaître **qu'une seule fois** par message.
-- La signature du Product Expert et ses formules de clôture sont des **réglages** (`getSignature`, `getCustomClosings`), jamais des constantes. L'outil est publié sous licence MIT : une valeur codée en dur signe les réponses de tous ses utilisateurs du nom d'un seul, et `stripReplyShell_` ne reconnaît plus la fin de leurs messages.
+- La signature du Product Expert et ses formules de clôture sont des **réglages** (`getSignature_`, `getCustomClosings_`), jamais des constantes. L'outil est publié sous licence MIT : une valeur codée en dur signe les réponses de tous ses utilisateurs du nom d'un seul, et `stripReplyShell_` ne reconnaît plus la fin de leurs messages.
 - Toute langue ajoutée à `REPLY_SHELLS` doit rester configurable : le panneau de contrôle dérive ses champs de cette liste (`languesGerees_`), il ne faut pas y recopier de langue en dur.
 - Aucune publication automatique : la proposition est placée dans le champ de réponse, jamais envoyée.
 
@@ -33,5 +33,6 @@ Conséquences à respecter lors de toute évolution :
 ## Sécurité
 - La WebApp est déployée en accès « N'importe qui » : `doPost` et `processMobileThreadUrl` doivent **toujours** commencer par `assertAuthorized_()`.
 - L'extraction serveur doit **toujours** passer par `assertAllowedHost_()`.
+- **Toute fonction interne finit par `_`.** `google.script.run` peut appeler n'importe quelle fonction publique depuis la page mobile, servie à des anonymes sous l'identité du propriétaire. Une fonction publique ajoutée doit figurer dans `PUBLIQUES_ATTENDUES` de `tests/31-surface-google-script-run.test.js`, avec sa justification ; si elle touche aux réglages, elle commence par `assertDepuisLeClasseur_()`.
 - La clé API Gemini ne doit jamais figurer dans une URL : elle passe par l'en-tête `x-goog-api-key`. Tout message d'erreur journalisé ou affiché doit traverser `redactSecrets_()`.
 - Ne jamais persister côté serveur une clé API reçue dans une requête entrante.

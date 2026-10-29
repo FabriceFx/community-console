@@ -16,7 +16,7 @@ function backend(options) {
   const scriptProps = {};
   if (o.secretConfigure !== false) scriptProps.PE_SHARED_SECRET = SECRET;
 
-  const appels = { generateReply: [], generateFollowUp: [] };
+  const appels = { generateReply_: [], generateFollowUp_: [] };
 
   const sandbox = {
     console: { log(){}, warn(){}, error(){} },
@@ -46,15 +46,15 @@ function backend(options) {
   ['gas/Config.gs', 'gas/Gemini.gs', 'gas/Api.gs'].forEach(f => vm.runInContext(fs.readFileSync(f, 'utf8'), sandbox));
 
   // La génération est simulée : ce fichier teste l'aiguillage, pas le modèle
-  sandbox.generateReply = function (content, author, product, apiKey) {
-    appels.generateReply.push({ content, author, product, apiKey });
+  sandbox.generateReply_ = function (content, author, product, apiKey) {
+    appels.generateReply_.push({ content, author, product, apiKey });
     return Object.assign({
       ok: true, status: 'REPONSE', confidence: 'HAUTE', lang: 'fr',
       text: 'Proposition pour ' + author, uiPathUnsourced: false, truncated: false
     }, o.reply || {});
   };
-  sandbox.generateFollowUp = function (contexte) {
-    appels.generateFollowUp.push(contexte);
+  sandbox.generateFollowUp_ = function (contexte) {
+    appels.generateFollowUp_.push(contexte);
     return Object.assign({
       ok: true, suite: 'NOUVEAU', confidence: 'MOYENNE', lang: 'fr',
       text: 'Réponse à la relance', repeatsPrevious: false, overlap: 0, truncated: false
@@ -78,11 +78,11 @@ console.log('\n1. Charge utile et autorisation');
 {
   const b = backend();
   check('JSON invalide refusé proprement', b.post('{ pas du json'), r => r.status === 'error' && /JSON/.test(r.message));
-  check('aucune génération déclenchée', b.appels.generateReply.length, n => n === 0);
+  check('aucune génération déclenchée', b.appels.generateReply_.length, n => n === 0);
 
   check('secret absent refusé', b.post({ content: 'x' }), r => r.code === 'unauthorized');
   check('secret erroné refusé', b.post({ content: 'x', secret: 'mauvais' }), r => r.code === 'unauthorized');
-  check('quota Gemini préservé sur refus', b.appels.generateReply.length, n => n === 0);
+  check('quota Gemini préservé sur refus', b.appels.generateReply_.length, n => n === 0);
 
   const sansSecret = backend({ secretConfigure: false });
   check('serveur sans secret configuré refuse tout', sansSecret.post({ content: 'x', secret: SECRET }), r => r.code === 'unauthorized');
@@ -107,12 +107,12 @@ console.log('\n2. Question nouvelle : générer, renvoyer, ne rien garder');
   check('aucun identifiant de suivi', r.id, v => v === undefined);
   check('aucun numéro de ligne', r.row, v => v === undefined);
 
-  const appel = b.appels.generateReply[0];
+  const appel = b.appels.generateReply_[0];
   check('contenu transmis au modèle', appel.content, c => c === 'Le partage externe est refusé.');
   check('auteur transmis', appel.author, a => a === 'Marie');
   check('produit transmis', appel.product, p => p === 'Google Drive');
   check('clé API de l\'appelant relayée', appel.apiKey, k => k === 'AIzaSyDUCLIENT');
-  check('la clé n\'est jamais persistée', b.sandbox.getGeminiApiKey(), k => k === '');
+  check('la clé n\'est jamais persistée', b.sandbox.getGeminiApiKey_(), k => k === '');
 
   check('question vide refusée', b.post({ secret: SECRET, content: '   ' }), x => x.status === 'error');
 }
@@ -141,7 +141,7 @@ console.log('\n4. Relance : tout le contexte vient de l\'appelant');
     author: 'Marie', product: 'Google Drive', apiKey: 'AIzaSyDUCLIENT'
   });
 
-  const ctx = b.appels.generateFollowUp[0];
+  const ctx = b.appels.generateFollowUp_[0];
   check('la relance atteint le modèle', ctx.followUp, t => /ça ne marche toujours pas/.test(t));
   check('la question d\'origine est transmise', ctx.question, q => /partager un dossier/.test(q));
   check('la réponse précédente est transmise', ctx.previousAnswer, p => /règle du domaine/.test(p));
@@ -160,7 +160,7 @@ console.log('\n4. Relance : tout le contexte vient de l\'appelant');
   // Première intervention sur un fil traité par un autre bénévole
   const premiere = backend({ followUp: { suite: 'RIEN_A_AJOUTER', text: 'La réponse existante est complète.' } });
   const rien = premiere.post({ secret: SECRET, action: 'followUp', followUpText: 'x', peADejaRepondu: false });
-  check('cadrage « autre bénévole » transmis', premiere.appels.generateFollowUp[0].peADejaRepondu, v => v === false);
+  check('cadrage « autre bénévole » transmis', premiere.appels.generateFollowUp_[0].peADejaRepondu, v => v === false);
   check('« rien à ajouter » signalé à l\'extension', rien.nothingToAdd, v => v === true);
 
   const redite = backend({ followUp: { repeatsPrevious: true, overlap: 82, confidence: 'FAIBLE' } });

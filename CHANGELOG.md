@@ -2,6 +2,27 @@
 
 Toutes les modifications notables apportées à ce projet sont documentées dans ce fichier.
 
+## [Non publié]
+
+### 🔒 Sécurité — la page mobile ouvrait tout le backend aux visiteurs anonymes
+
+> **N'importe qui ouvrant l'URL `/exec` pouvait lire la clé API Gemini et le secret partagé.**
+> `google.script.run` peut appeler toute fonction publique du projet depuis n'importe quelle page HtmlService qu'il sert. Or `doGet` livre `MobileUi` à des visiteurs anonymes, et le script s'exécute sous l'identité du propriétaire. Il suffisait de taper dans la console du navigateur :
+> `google.script.run.withSuccessHandler(console.log).getSettings()`
+> Le même procédé permettait de remplacer le secret par le sien (`setSharedSecret`), de consommer le quota Gemini sans secret (`generateReply`), ou d'employer la WebApp comme proxy HTTP (`fetchWithRetry`, qui accepte méthode, en-têtes et corps arbitraires).
+
+- **Fonctions internes rendues privées** : 22 fonctions de `Config.gs`, `Gemini.gs` et `Ui.gs` prennent le suffixe `_`, qui les rend invisibles de `google.script.run`. Restent publiques : `onOpen`, `doGet`, `doPost`, les trois cibles de menu, `processMobileThreadUrl` (protégée par le secret) et les trois fonctions du panneau.
+- **Garde `assertDepuisLeClasseur_`** en tête de `getSettings`, `saveSettings` et `generateSharedSecret` : l'appel est refusé si l'utilisateur actif est vide (visiteur anonyme) ou différent de l'utilisateur effectif (autre compte sur la WebApp).
+- **Nouvelle portée `userinfo.email`**, exigée par `Session.getActiveUser()`. Une nouvelle autorisation sera demandée à l'ouverture du panneau.
+- **`tests/31-surface-google-script-run.test.js`** : liste fermée des fonctions publiques, garde en première instruction, refus de l'anonyme et d'un autre compte. Il échoue sur la v1.13.3.
+- **Suppression de `generateSummaryWithGemini`**, conservée « pour compatibilité » et appelée nulle part.
+
+### 🧰 Outillage
+
+- **Fichier `VERSION`** et constante `COMMUNITY_CONSOLE_VERSION`, contrôlés par `atelier verifier`.
+- **Types `Proposition` et `PropositionRelance`** : les JSDoc de `generateReply_` et `generateFollowUp_` omettaient `uiPathUnsourced`, `truncated` et `overlap`.
+- **Boîte « À propos » à jour** : elle décrivait encore le suivi dans Google Sheets, retiré en v1.13.0, et affiche désormais la version du backend.
+
 ## [1.13.3] - 2026-09-02
 
 ### 🚨 Une erreur ne doit jamais se faire passer pour une réponse

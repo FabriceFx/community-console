@@ -2,10 +2,10 @@
  * Tests unitaires de la sécurité, de l'anonymisation PII et de la résilience HTTP.
  *
  * Couvre :
- * - sanitizePii (masquage d'emails, téléphones, mots de passe et clés)
+ * - sanitizePii_ (masquage d'emails, téléphones, mots de passe et clés)
  * - redactSecrets_ (nettoyage des URL avec ?key= et tokens AIza)
- * - fetchWithRetry (retry avec backoff exponentiel sur 429/500/503 et absence de retry sur 404)
- * - resolveRedirectUrl (résolution des redirections Vertex AI Search)
+ * - fetchWithRetry_ (retry avec backoff exponentiel sur 429/500/503 et absence de retry sur 404)
+ * - resolveRedirectUrl_ (résolution des redirections Vertex AI Search)
  * - Ui.gs & Config.gs (gestion sécurisée des paramètres et génération de secret)
  */
 const fs = require('fs'), vm = require('vm');
@@ -38,6 +38,11 @@ function createSecurityEnv() {
       sleep() {},
       getUuid() { return '01234567-89ab-cdef-0123-456789abcdef'; }
     },
+    // Le panneau s'ouvre depuis le classeur : utilisateur actif et effectif coïncident.
+    Session: {
+      getActiveUser: () => ({ getEmail: () => 'pe@example.com' }),
+      getEffectiveUser: () => ({ getEmail: () => 'pe@example.com' })
+    },
     UrlFetchApp: {
       fetch(url, options) {
         throw new Error('Default fetch mock not configured');
@@ -65,20 +70,20 @@ const check = (n, a, p) => {
   if (!ok) console.log('        obtenu : ' + (a !== undefined ? JSON.stringify(a).slice(0, 300) : 'undefined'));
 };
 
-console.log('\n1. Anonymisation PII (sanitizePii)');
+console.log('\n1. Anonymisation PII (sanitizePii_)');
 {
   const env = createSecurityEnv();
-  const sanitizePii = env.sandbox.sanitizePii;
+  const sanitizePii_ = env.sandbox.sanitizePii_;
 
   // Cas limites
-  check('entrée vide gérée', sanitizePii(''), v => v === '');
-  check('null géré', sanitizePii(null), v => v === '');
-  check('undefined géré', sanitizePii(undefined), v => v === '');
-  check('nombre géré', sanitizePii(12345), v => v === '');
+  check('entrée vide gérée', sanitizePii_(''), v => v === '');
+  check('null géré', sanitizePii_(null), v => v === '');
+  check('undefined géré', sanitizePii_(undefined), v => v === '');
+  check('nombre géré', sanitizePii_(12345), v => v === '');
 
   // Adresses e-mail
   const emailText = 'Contactez-moi sur dupont.jean+perso@gmail.com ou support@sub.domain.co.uk svp.';
-  const cleanedEmail = sanitizePii(emailText);
+  const cleanedEmail = sanitizePii_(emailText);
   check('adresses email masquées', cleanedEmail, t =>
     !t.includes('dupont.jean') &&
     !t.includes('@gmail.com') &&
@@ -88,7 +93,7 @@ console.log('\n1. Anonymisation PII (sanitizePii)');
 
   // Numéros de téléphone français et internationaux
   const phoneText = 'Appelez au 06 12 34 56 78 ou au +33 1 40 50 60 70 ou au +1 555 123 4567.';
-  const cleanedPhone = sanitizePii(phoneText);
+  const cleanedPhone = sanitizePii_(phoneText);
   check('numéros de téléphone masqués', cleanedPhone, t =>
     !t.includes('06 12 34 56 78') &&
     !t.includes('+33 1 40 50 60 70') &&
@@ -98,7 +103,7 @@ console.log('\n1. Anonymisation PII (sanitizePii)');
 
   // Mots de passe et tokens
   const secretsText = 'Voici mon token = secret_token_abc123 et mon mot de passe: SuperSecretP@ss99 pour le test.';
-  const cleanedSecrets = sanitizePii(secretsText);
+  const cleanedSecrets = sanitizePii_(secretsText);
   check('mots de passe et secrets masqués', cleanedSecrets, t =>
     !t.includes('secret_token_abc123') &&
     !t.includes('SuperSecretP@ss99') &&
@@ -132,10 +137,10 @@ console.log('\n2. Nettoyage des clés d\'API dans les logs (redactSecrets_)');
   check('undefined géré', redactSecrets_(undefined), v => v === '');
 }
 
-console.log('\n3. Résilience et Retries HTTP (fetchWithRetry)');
+console.log('\n3. Résilience et Retries HTTP (fetchWithRetry_)');
 {
   const env = createSecurityEnv();
-  const fetchWithRetry = env.sandbox.fetchWithRetry;
+  const fetchWithRetry_ = env.sandbox.fetchWithRetry_;
 
   // A. Succès immédiat (200) -> 1 seul appel
   let calls200 = 0;
@@ -143,7 +148,7 @@ console.log('\n3. Résilience et Retries HTTP (fetchWithRetry)');
     calls200++;
     return { getResponseCode: () => 200, getContentText: () => '{"ok":true}' };
   };
-  const res200 = fetchWithRetry('https://example.com', {}, 3);
+  const res200 = fetchWithRetry_('https://example.com', {}, 3);
   check('200 retourne immédiatement au 1er essai', calls200, n => n === 1);
   check('réponse 200 intacte', res200.getResponseCode(), c => c === 200);
 
@@ -153,7 +158,7 @@ console.log('\n3. Résilience et Retries HTTP (fetchWithRetry)');
     calls404++;
     return { getResponseCode: () => 404, getContentText: () => 'Not Found' };
   };
-  const res404 = fetchWithRetry('https://example.com/notfound', {}, 3);
+  const res404 = fetchWithRetry_('https://example.com/notfound', {}, 3);
   check('404 non réessayé (1 seul appel)', calls404, n => n === 1);
   check('réponse 404 retournée', res404.getResponseCode(), c => c === 404);
 
@@ -164,7 +169,7 @@ console.log('\n3. Résilience et Retries HTTP (fetchWithRetry)');
     if (calls503 === 1) return { getResponseCode: () => 503 };
     return { getResponseCode: () => 200, getContentText: () => 'Success after 503' };
   };
-  const resRecovered = fetchWithRetry('https://example.com/flaky', {}, 3);
+  const resRecovered = fetchWithRetry_('https://example.com/flaky', {}, 3);
   check('retry effectué après 503 (2 appels)', calls503, n => n === 2);
   check('succès final 200 retourné', resRecovered.getResponseCode(), c => c === 200);
 
@@ -174,7 +179,7 @@ console.log('\n3. Résilience et Retries HTTP (fetchWithRetry)');
     calls429++;
     return { getResponseCode: () => 429, getContentText: () => 'Rate limit' };
   };
-  const res429 = fetchWithRetry('https://example.com/ratelimit', {}, 3);
+  const res429 = fetchWithRetry_('https://example.com/ratelimit', {}, 3);
   check('maxRetries atteint sur 429 (3 appels)', calls429, n => n === 3);
   check('dernière réponse 429 retournée', res429.getResponseCode(), c => c === 429);
 
@@ -186,7 +191,7 @@ console.log('\n3. Résilience et Retries HTTP (fetchWithRetry)');
   };
   let errorCaught = null;
   try {
-    fetchWithRetry('https://api.google.com/?key=AIzaSySECRET123456', {}, 2);
+    fetchWithRetry_('https://api.google.com/?key=AIzaSySECRET123456', {}, 2);
   } catch (e) {
     errorCaught = e.message;
   }
@@ -197,15 +202,15 @@ console.log('\n3. Résilience et Retries HTTP (fetchWithRetry)');
   );
 }
 
-console.log('\n4. Résolution des Redirections Vertex AI Search (resolveRedirectUrl)');
+console.log('\n4. Résolution des Redirections Vertex AI Search (resolveRedirectUrl_)');
 {
   const env = createSecurityEnv();
-  const resolveRedirectUrl = env.sandbox.resolveRedirectUrl;
+  const resolveRedirectUrl_ = env.sandbox.resolveRedirectUrl_;
 
   // URL standard (hors Vertex) -> inchangée sans aucun appel HTTP
   let fetchCount = 0;
   env.sandbox.UrlFetchApp.fetch = () => { fetchCount++; return {}; };
-  const directUrl = resolveRedirectUrl('https://support.google.com/mail/answer/123');
+  const directUrl = resolveRedirectUrl_('https://support.google.com/mail/answer/123');
   check('URL non-Vertex inchangée', directUrl, u => u === 'https://support.google.com/mail/answer/123');
   check('aucun appel HTTP pour URL standard', fetchCount, n => n === 0);
 
@@ -216,12 +221,12 @@ console.log('\n4. Résolution des Redirections Vertex AI Search (resolveRedirect
       Location: 'https://support.google.com/docs/answer/998877'
     })
   });
-  const resolved = resolveRedirectUrl(vertexUrl);
+  const resolved = resolveRedirectUrl_(vertexUrl);
   check('redirection Vertex résolue vers le lien direct', resolved, u => u === 'https://support.google.com/docs/answer/998877');
 
   // URL Vertex avec échec réseau -> repli propre sur l'URL d'origine
   env.sandbox.UrlFetchApp.fetch = () => { throw new Error('Timeout'); };
-  const fallback = resolveRedirectUrl(vertexUrl);
+  const fallback = resolveRedirectUrl_(vertexUrl);
   check('repli sur URL d\'origine en cas d\'échec de redirection', fallback, u => u === vertexUrl);
 }
 
@@ -270,7 +275,7 @@ console.log('\n5. Configuration et Secret Partagé (Ui.gs & Config.gs)');
   const generated = generateSharedSecret();
   check('secret généré non vide', !!generated, v => v === true);
   check('tirets retirés du secret (format hexadécimal condensé)', generated.includes('-'), v => v === false);
-  check('secret généré immédiatement persisté côté serveur', env.sandbox.getSharedSecret(), s => s === generated);
+  check('secret généré immédiatement persisté côté serveur', env.sandbox.getSharedSecret_(), s => s === generated);
 }
 
 console.log('\n' + (fails === 0 ? 'Tous les tests passent.' : fails + ' test(s) en échec.'));
