@@ -22,6 +22,7 @@ Toutes les modifications notables apportées à ce projet sont documentées dans
 - **Fichier `VERSION`** et constante `COMMUNITY_CONSOLE_VERSION`, contrôlés par `atelier verifier`.
 - **Types `Proposition` et `PropositionRelance`** : les JSDoc de `generateReply_` et `generateFollowUp_` omettaient `uiPathUnsourced`, `truncated` et `overlap`.
 - **Boîte « À propos » à jour** : elle décrivait encore le suivi dans Google Sheets, retiré en v1.13.0, et affiche désormais la version du backend.
+- **Description de l'extension à jour (`extension/manifest.json`)** : elle annonçait elle aussi le suivi dans Google Sheets.
 
 ## [1.13.3] - 2026-09-02
 
