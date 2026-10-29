@@ -75,11 +75,11 @@ function champCloture_(lang) {
  * Refuse l'appel s'il ne vient pas d'une personne identifiée agissant sous sa propre autorité.
  *
  * Pourquoi ce garde : `google.script.run` peut appeler toute fonction publique du projet
- * depuis N'IMPORTE QUELLE page HtmlService qu'il sert — y compris MobileUi, que doGet
- * livre à des visiteurs anonymes. getSettings, saveSettings et generateSharedSecret
- * doivent rester publiques pour le panneau du classeur ; sans ce contrôle, n'importe qui
- * ouvrant l'URL /exec lisait la clé API et le secret depuis la console du navigateur,
- * ou remplaçait le secret par le sien.
+ * depuis N'IMPORTE QUELLE page HtmlService qu'il sert. Jusqu'en v1.14.0, doGet livrait
+ * la page mobile à des visiteurs anonymes : n'importe qui ouvrant l'URL /exec lisait la
+ * clé API et le secret depuis la console du navigateur. La page a disparu, mais
+ * getSettings, saveSettings et generateSharedSecret doivent rester publiques pour le
+ * panneau : ce garde reste la défense le jour où une page serait réintroduite.
  *
  * Dans la WebApp (« exécuter en tant que moi »), l'adresse de l'utilisateur actif est
  * vide pour un visiteur anonyme, et diffère de l'utilisateur effectif pour tout autre
@@ -168,7 +168,7 @@ function DEFAULT_CLOSINGS_FOR_UI_(lang) {
 }
 
 /**
- * Génère un secret partagé aléatoire à recopier dans l'extension et sur le mobile.
+ * Génère un secret partagé aléatoire à recopier dans l'extension.
  * @returns {string} Le secret généré et déjà enregistré côté serveur
  */
 function generateSharedSecret() {

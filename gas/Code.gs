@@ -2,7 +2,7 @@
  * @fileoverview Menu du classeur.
  *
  * Le classeur n'héberge plus de feuille de suivi : il ne sert qu'à porter le panneau
- * de réglages, dont la WebApp mobile a besoin côté serveur. D'où la disparition des
+ * de réglages, que le backend lit à chaque requête de l'extension. D'où la disparition des
  * entrées « Initialiser la feuille » et « Relancer l'analyse (ligne sélectionnée) ».
  */
 

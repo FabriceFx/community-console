@@ -2,6 +2,18 @@
 
 Toutes les modifications notables apportées à ce projet sont documentées dans ce fichier.
 
+## [Non publié]
+
+### ✂️ Retrait de la partie mobile — l'outil se concentre sur l'extension Chrome
+
+> La page mobile servie par `doGet` est à l'origine de la faille corrigée en v1.14.0 : toute page HtmlService publiée par la WebApp est ouverte aux anonymes, et leur donne `google.script.run` sous l'identité du propriétaire. Sans usage mobile, la supprimer ferme la surface au lieu de la garder.
+
+- **Supprimés** : `gas/MobileUi.html`, `gas/MobileBackend.gs` (`processMobileThreadUrl`), `mobile/bookmarklet.js` et `tests/22-mobile-backend.test.js`.
+- **`doGet` réduit à une sonde JSON** : ouvrir l'URL `/exec` affiche la version du backend, avec ou sans l'ancien paramètre `?api=json`. Aucune page HTML, aucun réglage divulgué — `tests/21-backend-sans-etat.test.js` le vérifie.
+- **`assertAllowedHost_` et `CONFIG.ALLOWED_HOSTS` supprimés** : ils protégeaient l'extraction serveur des fils, propre au mobile. L'extension lit le fil dans la page et n'envoie que du texte.
+- **Le garde `assertDepuisLeClasseur_` est conservé** : il ne coûte rien et reste la défense si une page devait un jour être réintroduite.
+- **Textes du panneau, du README et d'`AGENTS.md`** : plus aucune mention de la WebApp mobile ni du bookmarklet.
+
 ## [1.14.0] - 2026-10-29
 
 ### 🔒 Sécurité — la page mobile ouvrait tout le backend aux visiteurs anonymes

@@ -209,8 +209,8 @@
 
   <div class="card">
     <h2>Secret partagé (obligatoire)</h2>
-    <p>La WebApp est publiée en accès « N'importe qui » : ce secret est la seule barrière empêchant un tiers qui connaîtrait votre URL d'écrire dans cette feuille et de consommer votre quota Gemini.</p>
-    <p>Recopiez-le ensuite dans l'extension Chrome et sur la WebApp mobile.</p>
+    <p>La WebApp est publiée en accès « N'importe qui » : ce secret est la seule barrière empêchant un tiers qui connaîtrait votre URL de consommer votre quota Gemini.</p>
+    <p>Recopiez-le ensuite dans l'extension Chrome.</p>
 
     <div class="input-group">
       <label for="sharedSecret">Secret</label>
@@ -318,7 +318,7 @@
         .withSuccessHandler(function(secret) {
           btn.disabled = false;
           document.getElementById('sharedSecret').value = secret;
-          status.textContent = '✅ Secret généré. Recopiez-le dans l\'extension et sur le mobile.';
+          status.textContent = '✅ Secret généré. Recopiez-le dans l\'extension Chrome.';
           status.className = 'status success';
         })
         .withFailureHandler(function(error) {

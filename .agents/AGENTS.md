@@ -23,16 +23,16 @@ Conséquences à respecter lors de toute évolution :
 - Aucune publication automatique : la proposition est placée dans le champ de réponse, jamais envoyée.
 
 ## Aucune conservation de données
-L'outil ne stocke **ni question, ni réponse, ni historique**. Chaque requête est traitée puis oubliée, et le classeur Google Sheets ne sert qu'à porter le panneau de réglages — la WebApp mobile a besoin de la clé API côté serveur.
+L'outil ne stocke **ni question, ni réponse, ni historique**. Chaque requête est traitée puis oubliée, et le classeur Google Sheets ne sert qu'à porter le panneau de réglages, que `doPost` lit à chaque requête de l'extension.
 
 Conséquences à respecter lors de toute évolution :
-- `doPost` et `processMobileThreadUrl` ne doivent **jamais** écrire dans une feuille. Le bac à sable de `tests/21-backend-sans-etat.test.js` ne fournit ni `SpreadsheetApp` ni `LockService` : toute écriture y lèverait une exception.
+- `doPost` ne doit **jamais** écrire dans une feuille. Le bac à sable de `tests/21-backend-sans-etat.test.js` ne fournit ni `SpreadsheetApp` ni `LockService` : toute écriture y lèverait une exception.
 - Le contexte d'une relance est transmis par l'appelant (`question`, `previousAnswerFromThread`). Le backend ne le relit nulle part : c'est la seule source, et elle reflète le fil tel qu'il est.
 - `SpreadsheetApp` ne doit être employé que pour `getUi()` — menu et barre latérale.
 
 ## Sécurité
-- La WebApp est déployée en accès « N'importe qui » : `doPost` et `processMobileThreadUrl` doivent **toujours** commencer par `assertAuthorized_()`.
-- L'extraction serveur doit **toujours** passer par `assertAllowedHost_()`.
-- **Toute fonction interne finit par `_`.** `google.script.run` peut appeler n'importe quelle fonction publique depuis la page mobile, servie à des anonymes sous l'identité du propriétaire. Une fonction publique ajoutée doit figurer dans `PUBLIQUES_ATTENDUES` de `tests/31-surface-google-script-run.test.js`, avec sa justification ; si elle touche aux réglages, elle commence par `assertDepuisLeClasseur_()`.
+- La WebApp est déployée en accès « N'importe qui » : `doPost` doit **toujours** commencer par `assertAuthorized_()`.
+- **La WebApp ne sert aucune page HTML.** `doGet` n'est qu'une sonde JSON. Toute page HtmlService servie par la WebApp est ouverte aux anonymes et leur donne `google.script.run` sur toutes les fonctions publiques, sous l'identité du propriétaire. La page mobile, retirée en v1.15.0, a ainsi exposé la clé API et le secret.
+- **Toute fonction interne finit par `_`.** `google.script.run` peut appeler n'importe quelle fonction publique depuis toute page servie par le projet. Une fonction publique ajoutée doit figurer dans `PUBLIQUES_ATTENDUES` de `tests/31-surface-google-script-run.test.js`, avec sa justification ; si elle touche aux réglages, elle commence par `assertDepuisLeClasseur_()`.
 - La clé API Gemini ne doit jamais figurer dans une URL : elle passe par l'en-tête `x-goog-api-key`. Tout message d'erreur journalisé ou affiché doit traverser `redactSecrets_()`.
 - Ne jamais persister côté serveur une clé API reçue dans une requête entrante.

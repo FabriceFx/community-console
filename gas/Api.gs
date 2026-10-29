@@ -3,7 +3,7 @@
  *
  * Le service est sans état : chaque requête est traitée puis oubliée. Aucune
  * question, aucune réponse, aucun suivi n'est conservé — le classeur Google Sheets
- * n'héberge plus que le panneau de réglages, dont la WebApp mobile a besoin.
+ * n'héberge plus que le panneau de réglages, lus ici à chaque requête.
  *
  * Conséquence sur les relances : le contexte du fil ne peut plus être relu côté
  * serveur, il doit être transmis par l'appelant. L'extension le lit déjà dans la
@@ -27,7 +27,7 @@ function jsonOutput_(obj) {
 }
 
 /**
- * Point d'entrée pour les requêtes POST provenant de l'extension Chrome et du bookmarklet.
+ * Point d'entrée pour les requêtes POST provenant de l'extension Chrome.
  *
  * La WebApp étant déployée en accès « N'importe qui », chaque requête doit présenter le
  * secret partagé configuré dans le panneau de contrôle. Sans cette barrière, un tiers
@@ -150,21 +150,20 @@ function handleFollowUp_(data) {
 }
 
 /**
- * Point d'entrée pour la WebApp Mobile (iPhone/iPad/Navigateurs)
- * Servie automatiquement lorsqu'un utilisateur ouvre l'URL WebApp dans son navigateur mobile
+ * Sonde de diagnostic : ouvrir l'URL /exec dans un navigateur affiche la version servie.
+ *
+ * Ne sert délibérément aucune page HTML. Une page HtmlService servie par la WebApp
+ * — accessible aux anonymes, exécutée sous l'identité du propriétaire — permet à
+ * quiconque l'ouvre d'appeler par google.script.run toute fonction publique du
+ * projet. La page mobile a été retirée en v1.15.0 ; n'en réintroduire aucune.
+ *
+ * Aucune donnée n'est renvoyée hormis la version : pas de secret à vérifier ici.
+ *
+ * @returns {GoogleAppsScript.Content.TextOutput}
  */
-function doGet(e) {
-  if (e && e.parameter && e.parameter.api === 'json') {
-    return jsonOutput_({
-      status: "success",
-      message: "L'API Community Console PE Tracker est fonctionnelle."
-    });
-  }
-
-  const template = HtmlService.createTemplateFromFile('MobileUi');
-  return template.evaluate()
-    .setTitle('Suivi PE - Community Console Mobile')
-    .setFaviconUrl('https://www.gstatic.com/images/branding/product/1x/sheets_48dp.png')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+function doGet() {
+  return jsonOutput_({
+    status: "success",
+    message: "Backend de l'assistant Community Console opérationnel. Il ne répond qu'à l'extension Chrome."
+  });
 }

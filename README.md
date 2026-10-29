@@ -1,15 +1,15 @@
 # Assistant de réponse Community Console (PE Tracker)
 
-[![Version](https://img.shields.io/badge/version-1.14.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.15.0-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Chrome MV3](https://img.shields.io/badge/Chrome-Manifest_V3-green.svg)](extension/manifest.json)
 [![Google Apps Script](https://img.shields.io/badge/Backend-Google_Apps_Script-blue.svg)](gas/)
 
 *Read this in [English](#english-version).*
 
-Cet outil est destiné aux **Product Experts (PE) Google**. Il rédige une proposition de réponse aux questions (threads) de la Google Community Console et la place directement dans le champ d'édition du forum, depuis Google Chrome ou depuis un iPhone/iPad.
+Cet outil est destiné aux **Product Experts (PE) Google**. Il rédige une proposition de réponse aux questions (threads) de la Google Community Console et la place directement dans le champ d'édition du forum, depuis une extension Google Chrome.
 
-> **L'outil ne conserve rien.** Aucune question, aucune réponse, aucun historique n'est enregistré : chaque fil est analysé puis oublié. Le classeur Google Sheets n'héberge qu'un panneau de réglages — clé API, secret partagé, signature, formules de clôture — dont la WebApp mobile a besoin côté serveur.
+> **L'outil ne conserve rien.** Aucune question, aucune réponse, aucun historique n'est enregistré : chaque fil est analysé puis oublié. Le classeur Google Sheets n'héberge qu'un panneau de réglages — clé API de repli, secret partagé, signature, formules de clôture — que le backend lit à chaque requête de l'extension.
 
 ---
 
@@ -17,11 +17,8 @@ Cet outil est destiné aux **Product Experts (PE) Google**. Il rédige une propo
 
 ### 🚀 Fonctionnalités & Avancées Récentes
 
-#### 📱 Extension Chrome & Bookmarklet Mobile iOS
+#### 🧩 Extension Chrome
 - **Bouton flottant « ✍️ Proposer une réponse »** : Injecté automatiquement sur les pages des fils desktop.
-- **Support Mobile iPhone/iPad (`mobile/bookmarklet.js` & `gas/MobileUi.html`)** :
-  - WebApp mobile dédiée en Glassmorphism pour traiter les questions depuis un smartphone.
-  - Bookmarklet JavaScript standard compatible Safari et Chrome iOS.
 - **Extraction automatique du DOM** : Titre, auteur, produit Google concerné, corps de la question et détails techniques.
 - **Service Worker d'Arrière-Plan (`background.js`)** : Gestion asynchrone des requêtes HTTP Cross-Origin vers Google Apps Script sans blocage CORS.
 - **Placement Automatique de la Réponse** :
@@ -49,8 +46,8 @@ Cet outil est destiné aux **Product Experts (PE) Google**. Il rédige une propo
 - **Aucune donnée conservée** : ni question, ni réponse, ni historique. Ce qui n'est pas stocké ne peut pas fuiter.
 - **Champs sensibles masqués par défaut côté UI** : Clé API Gemini et secret partagé sont masqués (`type="password"`) avec bouton d'affichage/masquage discret (👁️/🙈) dans le panneau Google Sheets et le popup de l'extension.
 - **Clé API en en-tête HTTP** (`x-goog-api-key`) et filtrage systématique des secrets (`redactSecrets_`) dans les journaux et les messages d'erreur.
-- **Allowlist de domaine** sur l'extraction serveur : seules les URL `support.google.com` sont récupérables (protection anti-SSRF).
-- **Surface `google.script.run` fermée** : la page mobile étant servie à des visiteurs anonymes, toute fonction publique du projet leur était appelable depuis la console du navigateur. Seules dix fonctions restent publiques (points d'entrée, cibles de menu, panneau) ; les trois fonctions du panneau de réglages refusent tout appel qui ne vient pas du propriétaire, depuis le classeur. `tests/31-surface-google-script-run.test.js` échoue si une fonction publique apparaît hors de cette liste.
+- **Aucune page servie par la WebApp** : `doGet` n'est qu'une sonde JSON qui renvoie la version. Une page HtmlService servie à des visiteurs anonymes leur permettrait d'appeler par `google.script.run` toute fonction publique du projet — c'était le cas de la page mobile jusqu'en v1.14.0.
+- **Surface `google.script.run` fermée** : seules neuf fonctions restent publiques (points d'entrée, cibles de menu, panneau) ; les trois fonctions du panneau de réglages refusent tout appel qui ne vient pas du propriétaire, depuis le classeur. `tests/31-surface-google-script-run.test.js` échoue si une fonction publique apparaît hors de cette liste.
 - **Portée `userinfo.email`** : demandée pour ce seul contrôle d'identité (`Session.getActiveUser()`). Elle donne accès à votre adresse, à rien d'autre.
 
 #### 🤖 Backend Google Apps Script & IA Gemini
@@ -74,20 +71,20 @@ Cet outil est destiné aux **Product Experts (PE) Google**. Il rédige une propo
 #### 1. Backend (Google Sheets & Apps Script)
 1. Créez un nouveau fichier **Google Sheets**.
 2. Ouvrez **Extensions > Apps Script**.
-3. Copiez l'ensemble des fichiers du dossier `gas/` (`Code.gs`, `Api.gs`, `Gemini.gs`, `Ui.gs`, `Config.gs`, `Sidebar.html`, `MobileBackend.gs`, `MobileUi.html`, `appsscript.json`) dans votre projet.
+3. Copiez l'ensemble des fichiers du dossier `gas/` (`Code.gs`, `Api.gs`, `Gemini.gs`, `Ui.gs`, `Config.gs`, `Sidebar.html`, `appsscript.json`) dans votre projet.
 4. Actualisez votre feuille Google Sheets : le menu **"🛠️ Suivi PE"** apparaît.
    - Le classeur sert uniquement de support au panneau de réglages. Aucune feuille n'est à créer, aucune colonne à initialiser.
 5. Déployez l'application Web : **Déployer > Nouveau déploiement > Application Web**.
    - *Exécuter en tant que* : Vous (`votre_email@gmail.com`).
    - *Qui a accès* : **N'importe qui** (Anyone).
-6. Copiez l'URL de l'application Web générée.
+6. Copiez l'URL de l'application Web générée. Ouverte dans un navigateur, elle doit afficher un court message JSON avec `backendVersion` : c'est le moyen de vérifier quelle version tourne.
 
 #### 2. Configuration de la Clé API Gemini et du Secret Partagé
 1. Dans Google Sheets, cliquez sur **"🛠️ Suivi PE" > "Ouvrir le panneau de contrôle"**.
 2. Saisissez votre clé d'API Gemini et cliquez sur **Sauvegarder**.
 3. Dans la carte **Secret partagé**, cliquez sur **🎲 Générer un nouveau secret**, puis **Sauvegarder**.
    - ⚠️ Ce secret est **obligatoire** : la WebApp étant déployée en accès « N'importe qui », il constitue la seule barrière empêchant un tiers qui connaîtrait votre URL `/exec` de consommer votre quota Gemini.
-   - Recopiez-le ensuite dans l'extension Chrome et sur la WebApp mobile (il n'est demandé qu'une fois par appareil).
+   - Recopiez-le ensuite dans le popup de l'extension Chrome.
 4. Dans la carte **Signature**, saisissez le nom à apposer au bas de vos messages, puis **Sauvegarder**.
    - Tant que ce champ est vide, les messages générés ne sont pas signés. Ce n'est pas une erreur : tous les bénévoles ne signent pas leurs réponses.
 5. Dans la carte **Formules de clôture**, remplacez les phrases proposées par les vôtres, langue par langue.
@@ -126,11 +123,8 @@ Une mise à jour qui ajoute une portée OAuth (c'est le cas de la v1.14.0, avec 
 
 ### 🚀 Features & Recent Developments
 
-#### 📱 Chrome Extension & Mobile Support
+#### 🧩 Chrome Extension
 - **Floating "✍️ Proposer une réponse" Button**: Injected automatically on Google Support / Community Console thread pages.
-- **Mobile iPhone/iPad Support (`mobile/bookmarklet.js` & `gas/MobileUi.html`)**:
-  - Dedicated Glassmorphism mobile WebApp to process threads on smartphones.
-  - Standard JavaScript Bookmarklet compatible with iOS Safari and Chrome.
 - **Automated DOM Extraction**: Scrapes thread title, author, product, question content, and technical details.
 - **Background Service Worker (`background.js`)**: Handles cross-origin HTTP requests to Apps Script without CORS restrictions.
 - **Automatic Reply Placement**:
@@ -171,7 +165,7 @@ Une mise à jour qui ajoute une portée OAuth (c'est le cas de la v1.14.0, avec 
 #### 1. Backend (Google Sheets & Apps Script)
 1. Create a new **Google Sheet**.
 2. Navigate to **Extensions > Apps Script**.
-3. Copy all files from the `gas/` directory (`Code.gs`, `Api.gs`, `Gemini.gs`, `Ui.gs`, `Config.gs`, `Sidebar.html`, `MobileBackend.gs`, `MobileUi.html`, `appsscript.json`) into your Apps Script project.
+3. Copy all files from the `gas/` directory (`Code.gs`, `Api.gs`, `Gemini.gs`, `Ui.gs`, `Config.gs`, `Sidebar.html`, `appsscript.json`) into your Apps Script project.
 4. Refresh your Google Sheet to view the **"🛠️ Suivi PE"** menu.
 6. Deploy: **Deploy > New deployment > Web App**.
    - *Execute as*: Me.
@@ -183,7 +177,7 @@ Une mise à jour qui ajoute une portée OAuth (c'est le cas de la v1.14.0, avec 
 2. Paste your Gemini API key and click **Sauvegarder**.
 3. Under the **Secret partagé** card, click **🎲 Générer un nouveau secret**, then **Sauvegarder**.
    - ⚠️ This secret is **mandatory**: it protects your WebApp endpoint from unauthorized access and quota exhaustion.
-   - Copy this secret to use in the Chrome extension and Mobile WebApp.
+   - Copy this secret into the Chrome extension popup.
 4. Under the **Signature** card, enter the name to append to your messages, then **Sauvegarder**. Leave it empty to send unsigned messages.
 5. Under the **Formules de clôture** card, replace the shipped sentences with your own, language by language.
 
@@ -197,9 +191,9 @@ Une mise à jour qui ajoute une portée OAuth (c'est le cas de la v1.14.0, avec 
 
 ### 🧪 Tests
 
-Le backend Apps Script et l'extension sont couverts par 24 suites de tests automatisés sans dépendance externe (services Google simulés dans une VM Node.js, validant le cycle de vie `doPost` sans état, le backend mobile, le masquage PII, la résilience réseau, l'aller-retour du panneau de contrôle et les signatures configurables) :
+Le backend Apps Script et l'extension sont couverts par 27 suites de tests automatisés sans dépendance externe (services Google simulés dans une VM Node.js, validant le cycle de vie `doPost` sans état, la surface exposée à `google.script.run`, le masquage PII, la résilience réseau, l'aller-retour du panneau de contrôle et les signatures configurables) :
 
-The Apps Script backend and extension are covered by 24 automated test suites without external dependencies (mocked Google services in Node.js VM validating the stateless `doPost` lifecycle, mobile backend, PII masking, network resilience, control panel roundtrip, and configurable signatures):
+The Apps Script backend and extension are covered by 27 automated test suites without external dependencies (mocked Google services in Node.js VM validating the stateless `doPost` lifecycle, the `google.script.run` surface, PII masking, network resilience, control panel roundtrip, and configurable signatures):
 
 ```bash
 npm test

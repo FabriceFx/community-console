@@ -3,8 +3,8 @@
  *
  * L'outil ne conserve aucune question ni aucune réponse : chaque demande est
  * traitée puis oubliée. Le classeur Google Sheets n'héberge plus qu'un panneau
- * de réglages — clé API, secret partagé, signature, formules de clôture — dont
- * la WebApp mobile a besoin côté serveur.
+ * de réglages — clé API de repli, secret partagé, signature, formules de clôture —
+ * que doPost lit à chaque requête de l'extension.
  */
 
 // Version du backend, seule source du numéro côté Apps Script : le fichier VERSION
@@ -25,11 +25,6 @@ const CONFIG = {
   // Au-delà, la proposition reformule ce qui a déjà été dit — précisément ce que la
   // personne vient de signaler comme inopérant.
   MAX_FOLLOWUP_OVERLAP: 0.6,
-
-  // Domaines autorisés pour l'extraction serveur (anti-SSRF sur la WebApp mobile)
-  ALLOWED_HOSTS: [
-    "support.google.com"
-  ],
 
   // Valeurs de produit considérées comme « non identifié »
   // (évite les accueils du type « bienvenue sur la communauté de Inconnu »)
@@ -118,26 +113,6 @@ function assertAuthorized_(providedSecret) {
 }
 
 /**
- * Vérifie qu'une URL cible appartient à un domaine autorisé avant toute récupération serveur.
- * Empêche l'utilisation de la WebApp comme proxy HTTP ouvert au nom du compte Google propriétaire.
- *
- * @param {string} url L'URL à contrôler
- * @throws {Error} Si le domaine n'est pas autorisé
- */
-function assertAllowedHost_(url) {
-  const match = String(url || '').match(/^https?:\/\/([^\/\?#:]+)/i);
-  const host = match ? match[1].toLowerCase() : '';
-
-  const allowed = CONFIG.ALLOWED_HOSTS.some(function (allowedHost) {
-    return host === allowedHost || host.endsWith('.' + allowedHost);
-  });
-
-  if (!allowed) {
-    throw new Error("Domaine non autorisé. Seules les URL " + CONFIG.ALLOWED_HOSTS.join(', ') + " sont acceptées.");
-  }
-}
-
-/**
  * Récupère les formules de clôture personnalisées pour une langue.
  *
  * Ces phrases sont la signature du Product Expert : elles doivent être les siennes,
@@ -185,7 +160,7 @@ function setCustomClosings_(lang, text) {
  * Stockée dans les propriétés du SCRIPT, comme le secret partagé et les formules de
  * clôture : la WebApp s'exécute au nom du propriétaire pour des appelants anonymes,
  * et la signature doit être la même quel que soit le point d'entrée — extension,
- * WebApp mobile ou relance manuelle depuis la feuille.
+ * que la requête vienne d'une question ou d'une relance.
  *
  * Une signature vide est un choix légitime : tous les bénévoles ne signent pas leurs
  * messages, et le message s'arrête alors sur sa formule de clôture.

@@ -3,7 +3,7 @@
  *
  * Toute fonction publique du projet — tout nom qui ne finit pas par « _ » — peut être
  * appelée par `google.script.run` depuis n'importe quelle page HtmlService servie par le
- * projet. Or doGet livre MobileUi à des visiteurs ANONYMES, et le script s'exécute sous
+ * projet. Jusqu'en v1.13.3, doGet livrait la page mobile à des visiteurs ANONYMES, sous
  * l'identité du propriétaire. Il suffisait donc d'ouvrir l'URL /exec et de taper dans la
  * console :
  *
@@ -27,12 +27,11 @@ const check = (n, a, p) => { const ok = p(a); if (!ok) fails++; console.log((ok 
 // ou une fonction appelée par google.script.run ET protégée en tête de corps.
 const PUBLIQUES_ATTENDUES = {
   onOpen: 'déclencheur simple',
-  doGet: 'point d\'entrée de la WebApp',
+  doGet: 'sonde JSON de la WebApp, sans page HTML',
   doPost: 'point d\'entrée de la WebApp — assertAuthorized_',
   showSidebar: 'cible de menu',
   showAbout: 'cible de menu',
   showAvailableModels: 'cible de menu',
-  processMobileThreadUrl: 'MobileUi — assertAuthorized_',
   getSettings: 'Sidebar — assertDepuisLeClasseur_',
   saveSettings: 'Sidebar — assertDepuisLeClasseur_',
   generateSharedSecret: 'Sidebar — assertDepuisLeClasseur_'

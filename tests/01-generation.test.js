@@ -71,8 +71,6 @@ check('pas de message de bienvenue sur une clarification', clarif, t => !t.toLow
 
 console.log('\n5. Garde-fous de securite');
 check('la cle API est masquee dans les messages', sandbox.redactSecrets_('Request failed for https://x.com/v1?key=AIzaSyABCDEFGHIJKLMNOP'), t => !t.includes('AIzaSyABCDEFGHIJKLMNOP'));
-check('domaine autorise accepte', (()=>{ try { sandbox.assertAllowedHost_('https://support.google.com/x/thread/1'); return 'ok'; } catch(e){ return e.message; } })(), v => v === 'ok');
-check('domaine tiers rejete',     (()=>{ try { sandbox.assertAllowedHost_('https://evil.example.com/'); return 'ok'; } catch(e){ return 'rejete'; } })(), v => v === 'rejete');
 check('requete sans secret rejetee', (()=>{ try { sandbox.assertAuthorized_(''); return 'ok'; } catch(e){ return 'rejete'; } })(), v => v === 'rejete');
 sandbox.setSharedSecret_('s3cr3t');
 check('bon secret accepte',     (()=>{ try { sandbox.assertAuthorized_('s3cr3t'); return 'ok'; } catch(e){ return 'rejete'; } })(), v => v === 'ok');

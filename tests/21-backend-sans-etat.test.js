@@ -184,13 +184,20 @@ console.log('\n5. Aucun stockage, par construction');
     .forEach((trace) => check('Api.gs ne mentionne plus « ' + trace + ' »', source.includes(trace), v => v === false));
 }
 
-console.log('\n6. doGet sert toujours la WebApp mobile');
+console.log('\n6. doGet n\'est qu\'une sonde JSON');
 {
   const b = backend();
-  const json = JSON.parse(b.sandbox.doGet({ parameter: { api: 'json' } }).getContent());
-  check('sonde API fonctionnelle', json.status, v => v === 'success');
-  check('version renvoyée', !!json.backendVersion, v => v === true);
-  check('page mobile servie sans paramètre', !!b.sandbox.doGet({ parameter: {} }), v => v === true);
+  // Avec ou sans paramètre (l'ancienne sonde demandait ?api=json) : toujours du JSON.
+  [{ parameter: { api: 'json' } }, { parameter: {} }, undefined].forEach((e, i) => {
+    const json = JSON.parse(b.sandbox.doGet(e).getContent());
+    check('sonde ' + (i + 1) + ' : succès et version', json, j => j.status === 'success' && !!j.backendVersion);
+    check('sonde ' + (i + 1) + ' : aucun réglage divulgué', JSON.stringify(json), t => !/secret|apiKey|AIza/i.test(t));
+  });
+
+  // Une page HtmlService servie aux anonymes rouvrirait la surface google.script.run.
+  const source = fs.readFileSync('gas/Api.gs', 'utf8');
+  check('Api.gs ne sert aucune page HTML', /HtmlService\.create/.test(source), v => v === false);
+  check('plus de MobileUi.html dans gas/', fs.existsSync('gas/MobileUi.html'), v => v === false);
 }
 
 console.log('\n' + (fails === 0 ? 'Tous les tests passent.' : fails + ' test(s) en échec.'));

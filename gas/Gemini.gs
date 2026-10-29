@@ -317,7 +317,7 @@ function tauxDeModification_(propose, publie) {
   const a = normaliser(propose);
   const b = normaliser(publie);
 
-  // Sans proposition de référence (ligne mobile, génération en échec), le texte publié
+  // Sans proposition de référence (génération en échec), le texte publié
   // est intégralement de la main du PE : on le considère comme entièrement réécrit.
   if (!a || !b) return 1;
   if (a === b) return 0;
