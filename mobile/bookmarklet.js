@@ -1,5 +1,5 @@
 /**
- * PE Tracker - Solutions Mobile (iPhone / iPad iOS) v1.13.3
+ * PE Tracker - Solutions Mobile (iPhone / iPad iOS) v1.14.0
  *
  * Option 1 : Raccourci Apple iOS (Raccourcis / Shortcuts App) - RECOMMANDE SUR CHROME iOS
  * Option 2 : Bookmarklet JavaScript Standard ES5 (Safari iOS)
