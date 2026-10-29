@@ -12,7 +12,7 @@
 // L'extension la compare à la sienne : le projet Apps Script et l'extension se
 // déploient séparément, et un backend resté en arrière produit des comportements
 // incompréhensibles côté navigateur.
-const COMMUNITY_CONSOLE_VERSION = "1.13.3";
+const COMMUNITY_CONSOLE_VERSION = "1.14.0";
 
 const CONFIG = {
   VERSION: COMMUNITY_CONSOLE_VERSION,

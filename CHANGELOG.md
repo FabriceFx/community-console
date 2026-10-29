@@ -2,7 +2,7 @@
 
 Toutes les modifications notables apportées à ce projet sont documentées dans ce fichier.
 
-## [Non publié]
+## [1.14.0] - 2026-10-29
 
 ### 🔒 Sécurité — la page mobile ouvrait tout le backend aux visiteurs anonymes
 
