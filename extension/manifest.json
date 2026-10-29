@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Suivi PE - Community Console",
-  "version": "1.15.0",
+  "version": "1.15.1",
   "description": "Rédige avec Gemini une proposition de réponse aux fils de la Community Console, placée dans le champ de réponse sans être publiée.",
   "permissions": [
     "activeTab",

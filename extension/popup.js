@@ -49,36 +49,57 @@ document.addEventListener('DOMContentLoaded', function() {
   wireToggle(toggleKeyBtn, geminiApiKeyInput);
   wireToggle(toggleSecretBtn, sharedSecretInput);
 
-  // Sauvegarder la configuration
-  saveBtn.addEventListener('click', function() {
+  // Affiche le résultat là où on le voit : le popup dépasse souvent la hauteur
+  // visible, et un message placé sous le bouton passait inaperçu.
+  const afficher = (lignes, couleur, fugace = false) => {
+    status.textContent = lignes.join('\n');
+    status.style.whiteSpace = 'pre-line';
+    status.style.color = couleur;
+    status.scrollIntoView({ block: 'nearest' });
+    if (fugace) setTimeout(() => { status.textContent = ''; }, 3000);
+  };
+
+  // Sauvegarder la configuration.
+  //
+  // Chaque champ valide est enregistré, même si la configuration est incomplète :
+  // auparavant, une URL sans secret — ou une URL mal copiée — faisait refuser
+  // l'enregistrement de TOUS les champs, nom et clé compris. Une configuration
+  // incomplète se signale ; elle ne se refuse pas.
+  saveBtn.addEventListener('click', () => {
     const url = webappUrlInput.value.trim();
     const apiKey = geminiApiKeyInput.value.trim();
     const sharedSecret = sharedSecretInput.value.trim();
     const peDisplayName = peDisplayNameInput.value.trim();
 
-    if (url && !url.startsWith('https://script.google.com/')) {
-      status.textContent = '⚠️ L\'URL doit commencer par https://script.google.com/';
-      status.style.color = '#d93025';
-      return;
+    const aEnregistrer = { geminiApiKey: apiKey, sharedSecret, peDisplayName };
+    const avertissements = [];
+
+    // Une URL invalide n'est pas enregistrée : la précédente, si elle existe, reste en place.
+    if (!url || url.startsWith('https://script.google.com/')) {
+      aEnregistrer.webappUrl = url;
+    } else {
+      avertissements.push('⚠️ URL non enregistrée : elle doit commencer par https://script.google.com/ et finir par /exec.');
     }
 
-    if (url && !sharedSecret) {
-      status.textContent = '⚠️ Le secret partagé est obligatoire (panneau de contrôle Sheets).';
-      status.style.color = '#d93025';
-      return;
+    if (!url) {
+      avertissements.push('ℹ️ Sans URL de WebApp, les boutons du forum ne peuvent rien générer.');
+    } else if (!sharedSecret) {
+      avertissements.push('ℹ️ Sans secret partagé, le backend refusera les requêtes (🛠️ Suivi PE > Ouvrir le panneau de contrôle).');
+    }
+    if (!peDisplayName) {
+      avertissements.push('ℹ️ Sans nom d\'affichage, vos relances ne seront pas repérées dans les fils.');
     }
 
-    chrome.storage.local.set({
-      webappUrl: url,
-      geminiApiKey: apiKey,
-      sharedSecret: sharedSecret,
-      peDisplayName: peDisplayName
-    }, function() {
-      status.textContent = '✅ Configuration enregistrée avec succès !';
-      status.style.color = '#0f9d58';
-      setTimeout(function() {
-        status.textContent = '';
-      }, 3000);
+    chrome.storage.local.set(aEnregistrer, () => {
+      if (chrome.runtime.lastError) {
+        afficher(['❌ Échec de l\'enregistrement : ' + chrome.runtime.lastError.message], '#d93025');
+        return;
+      }
+      if (avertissements.length) {
+        afficher(['✅ Enregistré.', ...avertissements], '#b06000');
+      } else {
+        afficher(['✅ Configuration enregistrée avec succès !'], '#0f9d58', true);
+      }
     });
   });
 });

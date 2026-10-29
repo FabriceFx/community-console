@@ -1,6 +1,6 @@
 # Assistant de réponse Community Console (PE Tracker)
 
-[![Version](https://img.shields.io/badge/version-1.15.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.15.1-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Chrome MV3](https://img.shields.io/badge/Chrome-Manifest_V3-green.svg)](extension/manifest.json)
 [![Google Apps Script](https://img.shields.io/badge/Backend-Google_Apps_Script-blue.svg)](gas/)
@@ -191,9 +191,9 @@ Une mise à jour qui ajoute une portée OAuth (c'est le cas de la v1.14.0, avec 
 
 ### 🧪 Tests
 
-Le backend Apps Script et l'extension sont couverts par 27 suites de tests automatisés sans dépendance externe (services Google simulés dans une VM Node.js, validant le cycle de vie `doPost` sans état, la surface exposée à `google.script.run`, le masquage PII, la résilience réseau, l'aller-retour du panneau de contrôle et les signatures configurables) :
+Le backend Apps Script et l'extension sont couverts par 28 suites de tests automatisés sans dépendance externe (services Google simulés dans une VM Node.js, validant le cycle de vie `doPost` sans état, la surface exposée à `google.script.run`, le masquage PII, la résilience réseau, l'aller-retour du panneau de contrôle et les signatures configurables) :
 
-The Apps Script backend and extension are covered by 27 automated test suites without external dependencies (mocked Google services in Node.js VM validating the stateless `doPost` lifecycle, the `google.script.run` surface, PII masking, network resilience, control panel roundtrip, and configurable signatures):
+The Apps Script backend and extension are covered by 28 automated test suites without external dependencies (mocked Google services in Node.js VM validating the stateless `doPost` lifecycle, the `google.script.run` surface, PII masking, network resilience, control panel roundtrip, and configurable signatures):
 
 ```bash
 npm test

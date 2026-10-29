@@ -2,6 +2,18 @@
 
 Toutes les modifications notables apportées à ce projet sont documentées dans ce fichier.
 
+## [Non publié]
+
+### 💾 Le popup enregistre ce qui est rempli
+
+> **« Quand je ne remplis qu'une partie des valeurs et que je clique sur Sauvegarder, ça ne sauvegarde pas. »**
+> Une URL sans secret, ou une URL qui ne commençait pas par `https://script.google.com/`, faisait refuser l'enregistrement de **tous** les champs, nom d'affichage et clé compris. Le message d'explication s'affichait sous le bouton, souvent hors de la partie visible du popup.
+
+- **Enregistrement champ par champ (`extension/popup.js`)** : chaque champ valide est enregistré, même si la configuration est incomplète. Une URL invalide est seule écartée, et la précédente reste en place.
+- **Ce qui manque est dit, avec sa conséquence** : sans URL, rien ne peut être généré ; sans secret, le backend refusera les requêtes ; sans nom d'affichage, les relances ne seront pas repérées.
+- **Le message est amené à l'écran** (`scrollIntoView`), et un échec de `chrome.storage` est désormais signalé au lieu d'afficher un succès.
+- **`tests/32-popup-enregistrement-partiel.test.js`** : le vrai `popup.js` sur un stockage qui fusionne les clés comme `chrome.storage.local`. 8 échecs sur la v1.15.0.
+
 ## [1.15.0] - 2026-10-29
 
 ### ✂️ Retrait de la partie mobile — l'outil se concentre sur l'extension Chrome
