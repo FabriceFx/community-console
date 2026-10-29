@@ -2,7 +2,7 @@
 
 Toutes les modifications notables apportées à ce projet sont documentées dans ce fichier.
 
-## [Non publié]
+## [1.15.0] - 2026-10-29
 
 ### ✂️ Retrait de la partie mobile — l'outil se concentre sur l'extension Chrome
 
